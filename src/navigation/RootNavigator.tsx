@@ -7,6 +7,7 @@ import SubscriptionScreen from '../screens/subscription/SubscriptionScreen';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import { subscriptionService } from '../services/subscriptions';
+import supabase from '../lib/supabase';
 
 interface RootNavigatorProps {
   isAuthenticated?: boolean;
@@ -46,6 +47,50 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     },
   });
   const [trialEndDate, setTrialEndDate] = useState<Date | undefined>(undefined);
+
+  // Restore session on mount and listen for auth state changes
+  useEffect(() => {
+    let isMounted = true;
+    const restoreSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && isMounted) {
+        setIsAuthenticated(true);
+        setUserData(prev => ({
+          ...prev,
+          email: session.user.email || '',
+        }));
+      }
+    };
+    restoreSession();
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+      if (session) {
+        setIsAuthenticated(true);
+        setUserData(prev => ({
+          ...prev,
+          email: session.user.email || '',
+        }));
+      } else {
+        setIsAuthenticated(false);
+        setUserData({
+          email: '',
+          partnerName: '',
+          subscriptionPlan: null,
+          partnerProfile: {
+            name: '',
+            keyDates: {},
+            loveLanguage: '',
+            dislikes: '',
+          },
+        });
+      }
+    });
+    return () => {
+      isMounted = false;
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch subscription status on mount and after login
   useEffect(() => {

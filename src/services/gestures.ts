@@ -19,14 +19,22 @@ export interface GesturesResponse {
 class GestureService {
   async getTemplates(): Promise<GesturesResponse> {
     try {
+      console.log('[GestureService] Fetching gesture templates...');
       const { data, error } = await supabase
         .from('gestures')
         .select('*')
         .eq('is_template', true)
         .order('title', { ascending: true });
-      if (error) return { data: null, error: error.message };
+      
+      if (error) {
+        console.error('[GestureService] Error fetching templates:', error.message);
+        return { data: null, error: error.message };
+      }
+      
+      console.log('[GestureService] Fetched templates:', data?.length || 0);
       return { data: data || [], error: null };
     } catch (error) {
+      console.error('[GestureService] Unexpected error fetching templates:', error);
       return { data: null, error: 'Unexpected error' };
     }
   }
@@ -49,17 +57,32 @@ class GestureService {
 
   async createGesture(gesture: Omit<GestureInsert, 'user_id'>): Promise<GestureResponse> {
     try {
+      console.log('[GestureService] Creating gesture...', gesture);
+      
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { data: null, error: 'User not authenticated' };
+      if (!user) {
+        console.error('[GestureService] User not authenticated');
+        return { data: null, error: 'User not authenticated' };
+      }
+      
       const insertData = { ...gesture, user_id: user.id };
+      console.log('[GestureService] Inserting gesture data:', insertData);
+      
       const { data, error } = await supabase
         .from('gestures')
         .insert(insertData)
         .select()
         .single();
-      if (error) return { data: null, error: error.message };
+        
+      if (error) {
+        console.error('[GestureService] Error creating gesture:', error.message, error);
+        return { data: null, error: error.message };
+      }
+      
+      console.log('[GestureService] Gesture created successfully:', data?.title);
       return { data, error: null };
     } catch (error) {
+      console.error('[GestureService] Unexpected error creating gesture:', error);
       return { data: null, error: 'Unexpected error' };
     }
   }

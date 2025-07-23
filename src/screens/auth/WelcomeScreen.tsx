@@ -77,27 +77,31 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onNavigate }) => {
     },
   });
 
+  // Refactored benefit rotation logic
   useEffect(() => {
+    // Set up interval to change benefit index
     const interval = setInterval(() => {
-      // Fade out
+      setCurrentBenefitIndex((prev) => (prev + 1) % benefits.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Animate fade out/in when currentBenefitIndex changes
+  useEffect(() => {
+    // Fade out
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      // Fade in
       Animated.timing(fadeAnim, {
-        toValue: 0,
+        toValue: 1,
         duration: 300,
         useNativeDriver: true,
-      }).start(() => {
-        // Change benefit
-        setCurrentBenefitIndex((prev) => (prev + 1) % benefits.length);
-        // Fade in
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-      });
-    }, 3000); // Change every 3 seconds
-
-    return () => clearInterval(interval);
-  }, [fadeAnim]);
+      }).start();
+    });
+  }, [currentBenefitIndex]);
 
   const handleGetStarted = () => {
     onNavigate?.('partnerProfile');

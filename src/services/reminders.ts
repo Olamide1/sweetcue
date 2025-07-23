@@ -42,9 +42,12 @@ class ReminderService {
    */
   async createReminder(reminderData: ReminderData): Promise<ReminderResponse> {
     try {
+      console.log('[ReminderService] Creating reminder...', reminderData);
+      
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.error('[ReminderService] User not authenticated');
         return { data: null, error: 'User not authenticated' };
       }
 
@@ -53,6 +56,8 @@ class ReminderService {
         ...reminderData,
       };
 
+      console.log('[ReminderService] Inserting reminder data:', insertData);
+
       const { data, error } = await supabase
         .from('reminders')
         .insert(insertData)
@@ -60,14 +65,14 @@ class ReminderService {
         .single();
 
       if (error) {
-        console.error('Create reminder error:', error.message);
+        console.error('[ReminderService] Create reminder error:', error.message, error);
         return { data: null, error: error.message };
       }
 
-      console.log('Reminder created successfully:', data.title);
+      console.log('[ReminderService] Reminder created successfully:', data.title);
       return { data, error: null };
     } catch (error) {
-      console.error('Create reminder error:', error);
+      console.error('[ReminderService] Create reminder error:', error);
       return { data: null, error: 'An unexpected error occurred' };
     }
   }

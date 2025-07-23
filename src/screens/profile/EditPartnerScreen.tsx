@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import { partnerService } from '../../services/partners';
+import DatePicker from '../../components/DatePicker';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner';
 
@@ -59,19 +60,24 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
     const fetchProfile = async () => {
       setLoading(true);
       setError(null);
+      console.log('[EditPartnerScreen] Loading partner profile...');
       const { data, error } = await partnerService.getPartner();
       if (data) {
         setProfile({
           name: data.name || '',
           keyDates: {
-            birthday: data.birthday || '',
-            anniversary: data.anniversary || '',
+            birthday: data.birthday ? String(data.birthday) : '',
+            anniversary: data.anniversary ? String(data.anniversary) : '',
           },
           loveLanguage: data.love_language || '',
           dislikes: data.dislikes || '',
         });
+        console.log('[EditPartnerScreen] Loaded partner profile:', data);
       }
-      if (error) setError(error);
+      if (error) {
+        setError(error);
+        console.error('[EditPartnerScreen] Error loading partner profile:', error);
+      }
       setLoading(false);
     };
     fetchProfile();
@@ -172,6 +178,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
     }
     setLoading(true);
     setError(null);
+    console.log('[EditPartnerScreen] Saving partner profile...', profile);
     // Save to Supabase
     const { data, error } = await partnerService.getPartner();
     let partnerId = data?.id;
@@ -186,6 +193,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
         dislikes: profile.dislikes,
       });
       saveError = updateError;
+      if (!saveError) console.log('[EditPartnerScreen] Partner updated successfully:', profile.name);
     } else {
       // Create new
       const { error: createError } = await partnerService.createPartner({
@@ -196,16 +204,18 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
         dislikes: profile.dislikes,
       });
       saveError = createError;
+      if (!saveError) console.log('[EditPartnerScreen] Partner created successfully:', profile.name);
     }
     setLoading(false);
     if (saveError) {
       setError(saveError);
+      console.error('[EditPartnerScreen] Error saving partner profile:', saveError);
       Alert.alert('Error', saveError);
       return;
     }
     onSave?.(profile);
     Alert.alert('Success', 'Partner preferences updated successfully!', [
-      { text: 'OK', onPress: () => onNavigate?.('dashboard') }
+      { text: 'OK', onPress: () => { console.log('[EditPartnerScreen] Navigating to dashboard after save'); onNavigate?.('dashboard'); } }
     ]);
   };
 
@@ -216,10 +226,11 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
         'You have unsaved changes. Are you sure you want to go back?',
         [
           { text: 'Keep Editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => onNavigate?.('dashboard') }
+          { text: 'Discard', style: 'destructive', onPress: () => { console.log('[EditPartnerScreen] Discarding changes and navigating to dashboard'); onNavigate?.('dashboard'); } }
         ]
       );
     } else {
+      console.log('[EditPartnerScreen] Navigating to dashboard (no changes)');
       onNavigate?.('dashboard');
     }
   };
@@ -283,27 +294,9 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
             <Card style={styles.section}>
               <Text style={responsiveStyles.sectionTitle}>📅 Important Dates</Text>
               
-              <Text style={responsiveStyles.fieldLabel}>Birthday</Text>
-              <TextInput
-                style={responsiveStyles.input}
-                placeholder="MM/DD/YYYY"
-                placeholderTextColor={theme.colors.neutral[400]}
-                value={profile.keyDates.birthday || ''}
-                onChangeText={(text) => handleInputChange('birthday', text)}
-                keyboardType="numeric"
-                returnKeyType="next"
-              />
+              <DatePicker label="Birthday" value={profile.keyDates.birthday} onDateChange={date => handleInputChange('birthday', date)} />
               
-              <Text style={responsiveStyles.fieldLabel}>Anniversary</Text>
-              <TextInput
-                style={responsiveStyles.input}
-                placeholder="MM/DD/YYYY (Optional)"
-                placeholderTextColor={theme.colors.neutral[400]}
-                value={profile.keyDates.anniversary || ''}
-                onChangeText={(text) => handleInputChange('anniversary', text)}
-                keyboardType="numeric"
-                returnKeyType="next"
-              />
+              <DatePicker label="Anniversary" value={profile.keyDates.anniversary} onDateChange={date => handleInputChange('anniversary', date)} />
             </Card>
 
             {/* Love Language */}

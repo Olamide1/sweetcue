@@ -1,8 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal, Keyboard, TouchableWithoutFeedback, SafeAreaView as RNSafeAreaView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
+import EmptyState from '../../design-system/components/EmptyState';
 import { theme } from '../../design-system/tokens';
+import { partnerService } from '../../services/partners';
+import { reminderService } from '../../services/reminders';
+import { gestureService } from '../../services/gestures';
+import DatePicker from '../../components/DatePicker';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings';
 
@@ -15,7 +20,7 @@ interface DashboardScreenProps {
 }
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
-  partnerName = "Alex", // Default for now, will come from backend later
+  partnerName: initialPartnerName = "Alex",
   subscriptionPlan = 'trial',
   trialDaysLeft = 7,
   onNavigate,
@@ -119,48 +124,53 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     },
   });
 
-  const upcomingReminders = [
-    {
-      id: 1,
-      title: `${partnerName}'s Birthday`,
-      date: 'March 15',
-      daysUntil: 12,
-      type: 'birthday',
-      emoji: '🎂',
-      isUrgent: false
-    },
-    {
-      id: 2,
-      title: 'Anniversary',
-      date: 'March 22',
-      daysUntil: 19,
-      type: 'anniversary',
-      emoji: '💕',
-      isUrgent: false
-    },
-    {
-      id: 3,
-      title: 'Send flowers',
-      date: 'Tomorrow',
-      daysUntil: 1,
-      type: 'reminder',
-      emoji: '🌹',
-      isUrgent: true
-    },
-    {
-      id: 4,
-      title: 'Plan date night',
-      date: 'Today',
-      daysUntil: 0,
-      type: 'reminder',
-      emoji: '💫',
-      isUrgent: true
-    }
-  ];
+  const [partnerProfile, setPartnerProfile] = useState<any>(null);
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [remindersLoading, setRemindersLoading] = useState(true);
+  const [remindersError, setRemindersError] = useState<string | null>(null);
+  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  const [gestureTemplates, setGestureTemplates] = useState<any[]>([]);
+  const [gestureLoading, setGestureLoading] = useState(false);
+  const [gestureError, setGestureError] = useState<string | null>(null);
+  const [gestureSearch, setGestureSearch] = useState('');
+  const [selectedGesture, setSelectedGesture] = useState<any>(null);
+  const [reminderForm, setReminderForm] = useState({ title: '', description: '', scheduled_date: '' });
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const loveLanguage = partnerProfile?.love_language || '';
 
-  // Filter urgent reminders (due in next 48 hours)
-  const urgentReminders = upcomingReminders.filter(reminder => reminder.daysUntil <= 2);
-  const regularReminders = upcomingReminders.filter(reminder => reminder.daysUntil > 2);
+  // Fetch partner profile and reminders on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchData = async () => {
+      setRemindersLoading(true);
+      setRemindersError(null);
+      try {
+        const { data: partner, error: partnerError } = await partnerService.getPartner();
+        if (partnerError) throw new Error(partnerError);
+        if (!partner) throw new Error('No partner profile found.');
+        if (!isMounted) return;
+        setPartnerProfile(partner);
+        const { name, birthday, anniversary, love_language } = partner;
+        const partnerData = { name, birthday, anniversary };
+        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+        if (!isMounted) return;
+        setReminders(remindersSummary);
+      } catch (err: any) {
+        if (!isMounted) return;
+        setRemindersError(err.message || 'Failed to load reminders.');
+      } finally {
+        if (isMounted) setRemindersLoading(false);
+      }
+    };
+    fetchData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Split reminders into urgent (today/tomorrow) and regular
+  const urgentReminders = reminders.filter(r => r.isUrgent);
+  const regularReminders = reminders.filter(r => !r.isUrgent);
+  const partnerName = partnerProfile?.name || initialPartnerName;
 
   // Contextual quick actions based on urgent reminders
   const getContextualActions = () => {
@@ -187,6 +197,212 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const handleScrollToBottom = () => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
+  };
+
+  // Open Add Reminder modal and fetch gestures
+  const handleAddReminder = () => {
+    setShowAddReminderModal(true);
+    setGestureLoading(true);
+    setGestureError(null);
+    console.log('[DashboardScreen] Opening Add Reminder modal...');
+    
+    gestureService.getTemplates().then(({ data, error }) => {
+      if (error) {
+        console.error('[DashboardScreen] Error loading gesture templates:', error);
+        setGestureError(error);
+      } else {
+        console.log('[DashboardScreen] Loaded gesture templates:', data?.length || 0);
+        setGestureTemplates(data || []);
+      }
+      setGestureLoading(false);
+    });
+    
+    setGestureSearch('');
+    setSelectedGesture(null);
+    setReminderForm({ title: '', description: '', scheduled_date: '' });
+    setReminderError(null);
+  };
+
+  // Fallback gesture templates in case database is empty
+  const fallbackGestures = [
+    {
+      id: 'fallback-1',
+      title: 'Cook their favorite meal',
+      description: 'Prepare a special dinner at home',
+      category: 'acts_of_service',
+      effort_level: 'medium',
+      cost_level: 'low'
+    },
+    {
+      id: 'fallback-2',
+      title: 'Write a love letter',
+      description: 'Handwrite a heartfelt letter expressing your feelings',
+      category: 'words_of_affirmation',
+      effort_level: 'low',
+      cost_level: 'free'
+    },
+    {
+      id: 'fallback-3',
+      title: 'Plan a date night',
+      description: 'Organize a special evening just for the two of you',
+      category: 'quality_time',
+      effort_level: 'medium',
+      cost_level: 'low'
+    },
+    {
+      id: 'fallback-4',
+      title: 'Buy their favorite flowers',
+      description: 'Pick up a bouquet they love',
+      category: 'receiving_gifts',
+      effort_level: 'low',
+      cost_level: 'low'
+    },
+    {
+      id: 'fallback-5',
+      title: 'Give a massage',
+      description: 'Offer a relaxing back or foot massage',
+      category: 'physical_touch',
+      effort_level: 'medium',
+      cost_level: 'free'
+    }
+  ];
+
+  // Use database templates or fallback templates
+  const availableGestures = gestureTemplates.length > 0 ? gestureTemplates : fallbackGestures;
+
+  // Filter gestures for love language recommendations
+  const recommendedGestures = availableGestures.filter(g =>
+    loveLanguage && g.category && g.category.toLowerCase().includes(loveLanguage.toLowerCase().replace(/ /g, '_'))
+  );
+  const otherGestures = availableGestures.filter(g => !recommendedGestures.includes(g));
+  const searchedGestures = gestureSearch
+    ? availableGestures.filter(g =>
+        g.title.toLowerCase().includes(gestureSearch.toLowerCase()) ||
+        g.description?.toLowerCase().includes(gestureSearch.toLowerCase())
+      )
+    : availableGestures;
+
+  // Handle gesture selection
+  const handleSelectGesture = (gesture: any) => {
+    console.log('[DashboardScreen] Selected gesture:', gesture);
+    setSelectedGesture(gesture);
+    setReminderForm({
+      title: gesture.title,
+      description: gesture.description || '',
+      scheduled_date: '',
+    });
+  };
+
+  // Handle reminder form save
+  const handleSaveReminder = async () => {
+    setReminderSaving(true);
+    setReminderError(null);
+    console.log('[DashboardScreen] Saving reminder...', { selectedGesture, reminderForm });
+    
+    try {
+      if (!partnerProfile || !partnerProfile.id) {
+        const error = 'Partner profile not loaded. Please refresh or complete your profile.';
+        setReminderError(error);
+        console.error('[DashboardScreen] No partner profile found');
+        setReminderSaving(false);
+        return;
+      }
+      
+      if (!reminderForm.title || !reminderForm.scheduled_date) {
+        const error = 'Title and date are required.';
+        setReminderError(error);
+        console.error('[DashboardScreen] Missing required fields:', { title: reminderForm.title, date: reminderForm.scheduled_date });
+        setReminderSaving(false);
+        return;
+      }
+
+      let gestureId = null;
+      let customGestureCreated = false;
+
+      // Handle custom gesture creation
+      if (!selectedGesture || selectedGesture.id?.startsWith('fallback-')) {
+        // This is a custom gesture - create it in the database first
+        if (reminderForm.title && reminderForm.description) {
+          console.log('[DashboardScreen] Creating custom gesture...');
+          
+          // Determine category based on partner's love language
+          const category = partnerProfile.love_language 
+            ? partnerProfile.love_language.toLowerCase().replace(/ /g, '_')
+            : 'romance';
+          
+          const customGestureData = {
+            partner_id: partnerProfile.id,
+            title: reminderForm.title,
+            description: reminderForm.description,
+            effort_level: 'medium', // Default for custom gestures
+            cost_level: 'low', // Default for custom gestures
+            category: category,
+            is_template: false, // This is a user-created gesture, not a template
+          };
+
+          const { data: gestureData, error: gestureError } = await gestureService.createGesture(customGestureData);
+          
+          if (gestureError) {
+            console.error('[DashboardScreen] Error creating custom gesture:', gestureError);
+            // Continue without gesture_id - just save the reminder
+          } else {
+            gestureId = gestureData?.id;
+            customGestureCreated = true;
+            console.log('[DashboardScreen] Custom gesture created successfully:', gestureData?.title);
+          }
+        }
+      } else {
+        // This is a template gesture
+        gestureId = selectedGesture.id;
+      }
+
+      // Prepare reminder data
+      const reminderData = {
+        partner_id: partnerProfile.id,
+        gesture_id: gestureId,
+        title: reminderForm.title,
+        description: reminderForm.description || '',
+        scheduled_date: reminderForm.scheduled_date,
+      };
+
+      console.log('[DashboardScreen] Creating reminder with data:', reminderData);
+      
+      const { data, error } = await reminderService.createReminder(reminderData);
+      
+      if (error) {
+        console.error('[DashboardScreen] Error creating reminder:', error);
+        setReminderError(error);
+        setReminderSaving(false);
+        return;
+      }
+
+      console.log('[DashboardScreen] Reminder created successfully:', data?.title);
+      
+      // Close modal and refresh reminders
+      setShowAddReminderModal(false);
+      setReminderSaving(false);
+      
+      // Refetch reminders
+      setRemindersLoading(true);
+      setRemindersError(null);
+      try {
+        const { name, birthday, anniversary } = partnerProfile;
+        const partnerData = { name, birthday, anniversary };
+        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+        setReminders(remindersSummary);
+        console.log('[DashboardScreen] Refreshed reminders:', remindersSummary.length);
+      } catch (refreshError: any) {
+        console.error('[DashboardScreen] Error refreshing reminders:', refreshError);
+        setRemindersError('Reminder saved but failed to refresh list');
+      } finally {
+        setRemindersLoading(false);
+      }
+      
+    } catch (err: any) {
+      console.error('[DashboardScreen] Unexpected error saving reminder:', err);
+      setReminderError(err.message || 'Failed to save reminder.');
+      setReminderSaving(false);
+    }
   };
 
   return (
@@ -226,29 +442,71 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
 
           {/* Today's Focus - Urgent Reminders (next 24-48 hours) */}
-          {urgentReminders.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={responsiveStyles.sectionTitle}>Today's Focus</Text>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={responsiveStyles.sectionTitle}>Today's Focus</Text>
+              {remindersLoading && <Text style={styles.urgentBadgeText}>Loading...</Text>}
+              {!remindersLoading && urgentReminders.length > 0 && (
                 <View style={styles.urgentBadge}>
                   <Text style={styles.urgentBadgeText}>{urgentReminders.length}</Text>
                 </View>
-              </View>
+              )}
+            </View>
+            {remindersLoading ? (
+              <EmptyState title="Loading reminders..." description="Fetching your most urgent reminders." />
+            ) : remindersError ? (
+              <EmptyState
+                title="Couldn't load reminders"
+                description={remindersError}
+                actionText="Retry"
+                onActionPress={() => {
+                  // Refetch reminders
+                  setRemindersLoading(true);
+                  setRemindersError(null);
+                  partnerService.getPartner().then(({ data: partner, error: partnerError }) => {
+                    if (partnerError || !partner) {
+                      setRemindersError(partnerError || 'No partner profile found.');
+                      setRemindersLoading(false);
+                      return;
+                    }
+                    const { name, birthday, anniversary } = partner;
+                    const partnerData = { name, birthday, anniversary };
+                    reminderService.getUpcomingRemindersSummary(partnerData).then((remindersSummary) => {
+                      setReminders(remindersSummary);
+                      setRemindersLoading(false);
+                    }).catch((err) => {
+                      setRemindersError(err.message || 'Failed to load reminders.');
+                      setRemindersLoading(false);
+                    });
+                  });
+                }}
+                variant="error"
+              />
+            ) : urgentReminders.length === 0 ? (
+              <EmptyState
+                emoji="📝"
+                title="No urgent reminders!"
+                description="You're all caught up. Add a new reminder to stay on top of important moments."
+                actionText="Add Reminder"
+                onActionPress={() => handleAddReminder()}
+                variant="encouraging"
+              />
+            ) : (
               <View style={styles.remindersContainer}>
-                                 {urgentReminders.map((reminder) => (
-                   <Card key={reminder.id} style={{...styles.reminderCard, ...styles.urgentReminderCard}}>
+                {urgentReminders.map((reminder) => (
+                  <Card key={reminder.id} style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
                     <View style={styles.reminderContent}>
                       <View style={styles.reminderLeft}>
                         <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
                         <View style={styles.reminderInfo}>
                           <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                                                     <Text style={{...styles.reminderDate, ...styles.urgentReminderDate}}>
-                            {reminder.daysUntil === 0 ? 'Due Today' : reminder.date}
+                          <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
+                            {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
                           </Text>
                         </View>
                       </View>
                       <View style={styles.reminderRight}>
-                                                 <View style={{...styles.daysUntil, ...styles.urgentDaysUntil}}>
+                        <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
                           <Text style={styles.urgentDaysUntilText}>
                             {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
                           </Text>
@@ -258,8 +516,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   </Card>
                 ))}
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
           {/* Quick Actions - Contextual */}
           <View style={styles.section}>
@@ -377,16 +635,55 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </Card>
 
           {/* All Upcoming Reminders */}
-          {regularReminders.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={responsiveStyles.sectionTitle}>Upcoming Reminders</Text>
-                {regularReminders.length > 3 && (
-                  <TouchableOpacity style={styles.viewAllButton}>
-                    <Text style={styles.viewAllText}>View All</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={responsiveStyles.sectionTitle}>Upcoming Reminders</Text>
+              {!remindersLoading && regularReminders.length > 3 && (
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => onNavigate?.('reminderSetup')}>
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {remindersLoading ? (
+              <EmptyState title="Loading reminders..." description="Fetching your upcoming reminders." />
+            ) : remindersError ? (
+              <EmptyState
+                title="Couldn't load reminders"
+                description={remindersError}
+                actionText="Retry"
+                onActionPress={() => {
+                  // Refetch reminders
+                  setRemindersLoading(true);
+                  setRemindersError(null);
+                  partnerService.getPartner().then(({ data: partner, error: partnerError }) => {
+                    if (partnerError || !partner) {
+                      setRemindersError(partnerError || 'No partner profile found.');
+                      setRemindersLoading(false);
+                      return;
+                    }
+                    const { name, birthday, anniversary } = partner;
+                    const partnerData = { name, birthday, anniversary };
+                    reminderService.getUpcomingRemindersSummary(partnerData).then((remindersSummary) => {
+                      setReminders(remindersSummary);
+                      setRemindersLoading(false);
+                    }).catch((err) => {
+                      setRemindersError(err.message || 'Failed to load reminders.');
+                      setRemindersLoading(false);
+                    });
+                  });
+                }}
+                variant="error"
+              />
+            ) : regularReminders.length === 0 ? (
+              <EmptyState
+                emoji="🎉"
+                title="No upcoming reminders!"
+                description="Add reminders for birthdays, anniversaries, or thoughtful gestures."
+                actionText="Add Reminder"
+                onActionPress={() => handleAddReminder()}
+                variant="encouraging"
+              />
+            ) : (
               <View style={styles.remindersContainer}>
                 {regularReminders.slice(0, 3).map((reminder) => (
                   <Card key={reminder.id} style={styles.reminderCard}>
@@ -395,7 +692,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
                         <View style={styles.reminderInfo}>
                           <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                          <Text style={styles.reminderDate}>{reminder.date}</Text>
+                          <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
                         </View>
                       </View>
                       <View style={styles.reminderRight}>
@@ -405,93 +702,206 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   </Card>
                 ))}
               </View>
+            )}
+          </View>
+
+          {/* Add Reminder Modal */}
+          {showAddReminderModal && (
+            <Modal visible onRequestClose={() => setShowAddReminderModal(false)} animationType="slide" transparent>
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+                  <RNSafeAreaView style={{ width: '100%', alignItems: 'center', flex: 1 }}>
+                    <Card style={{ width: '95%', maxWidth: 420, maxHeight: '90%', padding: 0, marginTop: 16, marginBottom: 16 }}>
+                      <ScrollView contentContainerStyle={{ padding: theme.spacing[5], paddingTop: theme.spacing[6] }} showsVerticalScrollIndicator={false}>
+                        <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: theme.spacing[2] }}>Add Reminder</Text>
+                        <Text style={{ color: theme.colors.neutral[600], marginBottom: theme.spacing[3], fontSize: 15 }}>
+                          Choose a gesture idea or type your own. You can customize any suggestion or create something completely new.
+                        </Text>
+                        {/* Gesture Recommendations */}
+                        {gestureLoading ? (
+                          <EmptyState title="Loading gesture ideas..." description="Fetching gesture templates for inspiration." />
+                        ) : gestureError ? (
+                          <EmptyState title="Couldn't load gestures" description={gestureError} actionText="Retry" onActionPress={handleAddReminder} variant="error" />
+                        ) : gestureTemplates.length === 0 ? (
+                          <EmptyState title="No gesture templates found" description="Try adding your own custom gesture." />
+                        ) : (
+                          <>
+                            {loveLanguage && recommendedGestures.length > 0 && (
+                              <View style={{ marginBottom: theme.spacing[3] }}>
+                                <Text style={{ fontWeight: '600', marginBottom: theme.spacing[2] }}>Recommended for {loveLanguage}:</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: theme.spacing[2] }}>
+                                  {recommendedGestures.map((g) => (
+                                    <Card key={g.id} style={{ marginRight: theme.spacing[3], minWidth: 160, maxWidth: 200, borderColor: selectedGesture?.id === g.id ? theme.colors.primary[500] : theme.colors.neutral[200], borderWidth: selectedGesture?.id === g.id ? 2 : 1, backgroundColor: selectedGesture?.id === g.id ? theme.colors.primary[50] : 'white' }}>
+                                      <TouchableOpacity onPress={() => handleSelectGesture(g)} style={{ padding: theme.spacing[3], alignItems: 'flex-start' }}>
+                                        <Text style={{ fontWeight: '600', fontSize: 16, marginBottom: theme.spacing[1] }}>{g.title}</Text>
+                                        <Text style={{ color: theme.colors.neutral[700], fontSize: 13 }}>{g.description}</Text>
+                                        {selectedGesture?.id === g.id && <Text style={{ position: 'absolute', top: 8, right: 8, fontSize: 18, color: theme.colors.primary[500] }}>✔️</Text>}
+                                      </TouchableOpacity>
+                                    </Card>
+                                  ))}
+                                </ScrollView>
+                              </View>
+                            )}
+                            {/* Search Bar */}
+                            <Card style={{ padding: theme.spacing[2], flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing[3], backgroundColor: theme.colors.neutral[50] }}>
+                              <Text style={{ fontSize: 16, color: theme.colors.neutral[700], marginRight: theme.spacing[2] }}>🔍</Text>
+                              <TextInput
+                                style={{ flex: 1, fontSize: 16, color: theme.colors.neutral[900] }}
+                                placeholder="Search gestures or ideas..."
+                                value={gestureSearch}
+                                onChangeText={setGestureSearch}
+                                placeholderTextColor={theme.colors.neutral[400]}
+                                accessibilityLabel="Search gestures or ideas"
+                              />
+                              {gestureSearch.length > 0 && (
+                                <TouchableOpacity onPress={() => setGestureSearch('')}>
+                                  <Text style={{ fontSize: 18, color: theme.colors.neutral[400] }}>✕</Text>
+                                </TouchableOpacity>
+                              )}
+                            </Card>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: theme.spacing[3] }}>
+                              {searchedGestures.filter(g => !recommendedGestures.some(rg => rg.id === g.id)).map((g) => (
+                                <Card key={g.id} style={{ marginRight: theme.spacing[3], minWidth: 160, maxWidth: 200, borderColor: selectedGesture?.id === g.id ? theme.colors.primary[500] : theme.colors.neutral[200], borderWidth: selectedGesture?.id === g.id ? 2 : 1, backgroundColor: selectedGesture?.id === g.id ? theme.colors.primary[50] : 'white' }}>
+                                  <TouchableOpacity onPress={() => handleSelectGesture(g)} style={{ padding: theme.spacing[3], alignItems: 'flex-start' }}>
+                                    <Text style={{ fontWeight: '600', fontSize: 16, marginBottom: theme.spacing[1] }}>{g.title}</Text>
+                                    <Text style={{ color: theme.colors.neutral[700], fontSize: 13 }}>{g.description}</Text>
+                                    {selectedGesture?.id === g.id && <Text style={{ position: 'absolute', top: 8, right: 8, fontSize: 18, color: theme.colors.primary[500] }}>✔️</Text>}
+                                  </TouchableOpacity>
+                                </Card>
+                              ))}
+                            </ScrollView>
+                          </>
+                        )}
+                        {/* Reminder Form */}
+                        <View style={{ marginBottom: theme.spacing[3] }}>
+                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Title</Text>
+                          <TextInput
+                            style={{ backgroundColor: theme.colors.neutral[50], borderRadius: 8, padding: 10, fontSize: 16, marginBottom: theme.spacing[2] }}
+                            placeholder={selectedGesture ? "Customize the title..." : "What do you want to remember?"}
+                            value={reminderForm.title}
+                            onChangeText={text => {
+                              setReminderForm(f => ({ ...f, title: text }));
+                              // If user starts typing a custom title, clear the selected gesture
+                              if (selectedGesture && text !== selectedGesture.title) {
+                                setSelectedGesture(null);
+                              }
+                            }}
+                            placeholderTextColor={theme.colors.neutral[400]}
+                            accessibilityLabel="Reminder Title"
+                          />
+                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Description</Text>
+                          <TextInput
+                            style={{ backgroundColor: theme.colors.neutral[50], borderRadius: 8, padding: 10, fontSize: 15, marginBottom: theme.spacing[2], minHeight: 40 }}
+                            placeholder={selectedGesture ? "Add more details..." : "Optional details..."}
+                            value={reminderForm.description}
+                            onChangeText={text => {
+                              setReminderForm(f => ({ ...f, description: text }));
+                              // If user starts typing a custom description, clear the selected gesture
+                              if (selectedGesture && text !== selectedGesture.description) {
+                                setSelectedGesture(null);
+                              }
+                            }}
+                            placeholderTextColor={theme.colors.neutral[400]}
+                            multiline
+                            accessibilityLabel="Reminder Description"
+                          />
+                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Date</Text>
+                          <DatePicker label="Date" value={reminderForm.scheduled_date} onDateChange={date => setReminderForm(f => ({ ...f, scheduled_date: date }))} />
+                        </View>
+                        {reminderError && <Text style={{ color: theme.colors.error[600], marginBottom: theme.spacing[2] }}>{reminderError}</Text>}
+                        <Button title={reminderSaving ? 'Saving...' : 'Save Reminder'} onPress={handleSaveReminder} disabled={reminderSaving} />
+                        <Button title="Cancel" onPress={() => setShowAddReminderModal(false)} variant="ghost" />
+                      </ScrollView>
+                    </Card>
+                  </RNSafeAreaView>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
+          )}
+          {/* Menu Backdrop */}
+          {showProfileMenu && (
+            <TouchableOpacity 
+              style={styles.menuBackdrop}
+              onPress={() => setShowProfileMenu(false)}
+              activeOpacity={1}
+            />
+          )}
+
+          {/* Profile Menu */}
+          {showProfileMenu && (
+            <View style={responsiveStyles.profileMenu}>
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  console.log('Edit Partner menu item pressed');
+                  setShowProfileMenu(false);
+                  onNavigate?.('editPartner');
+                }}
+              >
+                <Text style={styles.menuItemEmoji}>👤</Text>
+                <Text style={styles.menuItemText}>Edit Partner</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  console.log('Manage Subscription menu item pressed');
+                  setShowProfileMenu(false);
+                  onNavigate?.('subscription');
+                }}
+              >
+                <Text style={styles.menuItemEmoji}>💳</Text>
+                <Text style={styles.menuItemText}>Manage Subscription</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  console.log('Settings menu item pressed');
+                  setShowProfileMenu(false);
+                  onNavigate?.('settings');
+                }}
+              >
+                <Text style={styles.menuItemEmoji}>⚙️</Text>
+                <Text style={styles.menuItemText}>Settings</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  console.log('Recent Activity menu item pressed');
+                  setShowProfileMenu(false);
+                  // TODO: Navigate to recent activity when implemented
+                  console.log('Navigate to recent activity');
+                }}
+              >
+                <Text style={styles.menuItemEmoji}>📊</Text>
+                <Text style={styles.menuItemText}>Recent Activity</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.menuDivider} />
+              
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => {
+                  console.log('Sign Out menu item pressed');
+                  setShowProfileMenu(false);
+                  onLogout?.();
+                }}
+              >
+                <Text style={styles.menuItemEmoji}>👋</Text>
+                <Text style={[styles.menuItemText, styles.logoutText]}>Sign Out</Text>
+              </TouchableOpacity>
             </View>
           )}
-        </ScrollView>
 
-        {/* Menu Backdrop */}
-        {showProfileMenu && (
-          <TouchableOpacity 
-            style={styles.menuBackdrop}
-            onPress={() => setShowProfileMenu(false)}
-            activeOpacity={1}
+          {/* Scroll Indicator */}
+          <ScrollIndicator
+            scrollY={scrollY}
+            onPress={handleScrollToBottom}
+            showThreshold={200}
           />
-        )}
-
-        {/* Profile Menu */}
-        {showProfileMenu && (
-          <View style={responsiveStyles.profileMenu}>
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                console.log('Edit Partner menu item pressed');
-                setShowProfileMenu(false);
-                onNavigate?.('editPartner');
-              }}
-            >
-              <Text style={styles.menuItemEmoji}>👤</Text>
-              <Text style={styles.menuItemText}>Edit Partner</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                console.log('Manage Subscription menu item pressed');
-                setShowProfileMenu(false);
-                onNavigate?.('subscription');
-              }}
-            >
-              <Text style={styles.menuItemEmoji}>💳</Text>
-              <Text style={styles.menuItemText}>Manage Subscription</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                console.log('Settings menu item pressed');
-                setShowProfileMenu(false);
-                onNavigate?.('settings');
-              }}
-            >
-              <Text style={styles.menuItemEmoji}>⚙️</Text>
-              <Text style={styles.menuItemText}>Settings</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                console.log('Recent Activity menu item pressed');
-                setShowProfileMenu(false);
-                // TODO: Navigate to recent activity when implemented
-                console.log('Navigate to recent activity');
-              }}
-            >
-              <Text style={styles.menuItemEmoji}>📊</Text>
-              <Text style={styles.menuItemText}>Recent Activity</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.menuDivider} />
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                console.log('Sign Out menu item pressed');
-                setShowProfileMenu(false);
-                onLogout?.();
-              }}
-            >
-              <Text style={styles.menuItemEmoji}>👋</Text>
-              <Text style={[styles.menuItemText, styles.logoutText]}>Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Scroll Indicator */}
-        <ScrollIndicator
-          scrollY={scrollY}
-          onPress={handleScrollToBottom}
-          showThreshold={200}
-        />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );

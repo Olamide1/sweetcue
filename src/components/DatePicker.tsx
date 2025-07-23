@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../design-system/tokens';
@@ -9,6 +9,9 @@ interface DatePickerProps {
   placeholder?: string;
   onDateChange: (date: string) => void;
   style?: any;
+  pastOnly?: boolean; // If true, restrict to past dates only
+  minDate?: Date;
+  maxDate?: Date;
 }
 
 const DatePicker: React.FC<DatePickerProps> = ({
@@ -16,12 +19,27 @@ const DatePicker: React.FC<DatePickerProps> = ({
   value,
   placeholder = "Select date",
   onDateChange,
-  style
+  style,
+  pastOnly = false,
+  minDate,
+  maxDate
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    value ? new Date(value) : undefined
-  );
+  const [error, setError] = useState<string | null>(null);
+  // In useEffect and initial state, always use a valid date for selectedDate
+  const getValidDate = (val?: string) => {
+    if (val && !isNaN(new Date(val).getTime())) {
+      return new Date(val);
+    }
+    return new Date();
+  };
+
+  const [selectedDate, setSelectedDate] = useState<Date>(getValidDate(value));
+
+  // Sync selectedDate with value prop
+  useEffect(() => {
+    setSelectedDate(getValidDate(value));
+  }, [value]);
 
   const formatDisplayDate = (date: Date): string => {
     return date.toLocaleDateString('en-US', {
@@ -40,8 +58,13 @@ const DatePicker: React.FC<DatePickerProps> = ({
     if (Platform.OS === 'android') {
       setShowPicker(false);
     }
-    
     if (date) {
+      // Edge case: If pastOnly, block future dates
+      if (pastOnly && date > new Date()) {
+        setError('Please select a past date.');
+        return;
+      }
+      setError(null);
       setSelectedDate(date);
       const formattedDate = formatBackendDate(date);
       onDateChange(formattedDate);
@@ -56,31 +79,34 @@ const DatePicker: React.FC<DatePickerProps> = ({
     setShowPicker(false);
   };
 
+  // Determine min/max date
+  const min = minDate || new Date(1900, 0, 1);
+  const max = maxDate || (pastOnly ? new Date() : undefined);
+
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.dateButton} onPress={openPicker}>
+      <TouchableOpacity style={styles.dateButton} onPress={openPicker} accessibilityLabel={label}>
         <Text style={[styles.dateText, !selectedDate && styles.placeholderText]}>
           {selectedDate ? formatDisplayDate(selectedDate) : placeholder}
         </Text>
         <Text style={styles.icon}>📅</Text>
       </TouchableOpacity>
-
+      {error && <Text style={styles.errorText}>{error}</Text>}
       {showPicker && (
         <DateTimePicker
-          value={selectedDate || new Date()}
+          value={selectedDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={handleDateChange}
-          maximumDate={new Date()} // Can't select future dates
-          minimumDate={new Date(1900, 0, 1)} // Reasonable minimum date
+          minimumDate={min}
+          maximumDate={max}
         />
       )}
-
       {Platform.OS === 'ios' && showPicker && (
         <View style={styles.iosPickerContainer}>
           <View style={styles.iosPickerHeader}>
-            <TouchableOpacity onPress={closePicker}>
+            <TouchableOpacity onPress={closePicker} accessibilityLabel="Done">
               <Text style={styles.iosPickerButton}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -138,6 +164,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.primary[600],
+  },
+  errorText: {
+    color: theme.colors.error[600],
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 4,
   },
 });
 

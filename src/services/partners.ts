@@ -28,7 +28,7 @@ class PartnerService {
         name: profile.name,
         birthday: profile.birthday || null,
         anniversary: profile.anniversary || null,
-        love_language: profile.loveLanguage,
+        love_language: profile.loveLanguage, // map camelCase to snake_case
         dislikes: profile.dislikes,
       };
       const { data, error } = await supabase
@@ -37,6 +37,8 @@ class PartnerService {
         .select()
         .single();
       if (error) return { data: null, error: error.message };
+      // Map love_language to loveLanguage in the returned data
+      if (data) data.loveLanguage = data.love_language;
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };
@@ -55,6 +57,8 @@ class PartnerService {
         .limit(1)
         .single();
       if (error) return { data: null, error: error.message };
+      // Map love_language to loveLanguage in the returned data
+      if (data) data.loveLanguage = data.love_language;
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };
@@ -65,9 +69,12 @@ class PartnerService {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { data: null, error: 'User not authenticated' };
+      // Map loveLanguage to love_language for update
       const updateData: PartnerUpdate = {
         ...profile,
+        ...(profile.loveLanguage !== undefined ? { love_language: profile.loveLanguage } : {}),
       };
+      delete updateData.loveLanguage;
       const { data, error } = await supabase
         .from('partners')
         .update(updateData)
@@ -76,6 +83,8 @@ class PartnerService {
         .select()
         .single();
       if (error) return { data: null, error: error.message };
+      // Map love_language to loveLanguage in the returned data
+      if (data) data.loveLanguage = data.love_language;
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };
