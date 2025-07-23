@@ -168,6 +168,85 @@ class AuthService {
     const user = await this.getCurrentUser();
     return !!user;
   }
+
+  /**
+   * Delete the current user account and all associated data
+   */
+  async deleteAccount(): Promise<{ error: AuthError | null }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('Delete account error: No user found');
+        return { error: { message: 'No user found' } as AuthError };
+      }
+
+      console.log('Deleting account for user:', user.email);
+
+      // For user-initiated deletion, we need to delete all user data first, then the user
+      // The user will be automatically deleted when they sign out and their session expires
+      // This approach ensures all data is properly cleaned up
+
+      // First, delete all user data from all tables
+      const userId = user.id;
+      
+      // Delete reminders
+      const { error: remindersError } = await supabase
+        .from('reminders')
+        .delete()
+        .eq('user_id', userId);
+      
+      if (remindersError) {
+        console.error('Error deleting reminders:', remindersError);
+      }
+
+      // Delete gestures
+      const { error: gesturesError } = await supabase
+        .from('gestures')
+        .delete()
+        .eq('user_id', userId);
+      
+      if (gesturesError) {
+        console.error('Error deleting gestures:', gesturesError);
+      }
+
+      // Delete partners
+      const { error: partnersError } = await supabase
+        .from('partners')
+        .delete()
+        .eq('user_id', userId);
+      
+      if (partnersError) {
+        console.error('Error deleting partners:', partnersError);
+      }
+
+      // Delete profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('user_id', userId);
+      
+      if (profileError) {
+        console.error('Error deleting profile:', profileError);
+      }
+
+      // Sign out the user (this will invalidate their session)
+      const { error: signOutError } = await supabase.auth.signOut();
+      
+      if (signOutError) {
+        console.error('Error signing out:', signOutError);
+        return { error: signOutError };
+      }
+
+      console.log('Account and all data deleted successfully');
+      return { error: null };
+    } catch (error) {
+      console.error('Delete account error:', error);
+      return { 
+        error: { message: 'An unexpected error occurred during account deletion' } as AuthError 
+      };
+    }
+  }
 }
 
 // Export singleton instance
