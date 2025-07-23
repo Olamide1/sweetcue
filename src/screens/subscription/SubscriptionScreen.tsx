@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
+import { subscriptionService } from '../../services/subscriptions';
+import { Alert } from 'react-native';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription';
 
@@ -34,6 +36,18 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<'trial' | 'monthly' | 'yearly'>('trial');
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      setLoadingStatus(true);
+      const status = await subscriptionService.getSubscriptionStatus();
+      setSubscriptionStatus(status);
+      setLoadingStatus(false);
+    };
+    fetchStatus();
+  }, []);
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -212,6 +226,29 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
 
   const selectedPlanData = plans.find(p => p.id === selectedPlan);
 
+  const handleBack = async () => {
+    const status = await subscriptionService.getSubscriptionStatus();
+    if (status.isActive && !status.isTrialExpired) {
+      onNavigate?.('dashboard');
+    } else {
+      onNavigate?.('dashboard'); // fallback, always go to dashboard
+    }
+  };
+
+  // Determine subscription states
+  const onActiveTrial = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && !subscriptionStatus.isTrialExpired;
+  const onExpiredTrial = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.planType === 'trial' && subscriptionStatus.isTrialExpired;
+  const onActivePaid = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.status === 'active' && subscriptionStatus.planType !== 'trial' && !subscriptionStatus.isTrialExpired;
+  const onCancelledOrExpiredPaid = subscriptionStatus && subscriptionStatus.hasSubscription && (subscriptionStatus.status === 'cancelled' || subscriptionStatus.status === 'expired');
+  const noSubscription = !subscriptionStatus || !subscriptionStatus.hasSubscription;
+
+  // Show trial option only if no subscription or trial expired
+  const showTrialOption = noSubscription || onExpiredTrial;
+  // Show paid plans if not on active paid plan
+  const showPaidPlans = noSubscription || onActiveTrial || onExpiredTrial || onCancelledOrExpiredPaid;
+  // Show manage if on active paid plan
+  const showManage = onActivePaid;
+
   return (
     <View style={styles.container}>
       {/* Modern Gradient Background */}
@@ -234,11 +271,38 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
           )}
           scrollEventThrottle={16}
         >
+          {/* Subscription Status Summary */}
+          {loadingStatus ? (
+            <Text style={{ textAlign: 'center', marginVertical: 16 }}>Loading subscription status...</Text>
+          ) : subscriptionStatus && subscriptionStatus.hasSubscription ? (
+            <Card style={{ marginBottom: 16, backgroundColor: 'rgba(99,102,241,0.08)' }}>
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+                  {subscriptionStatus.planType === 'trial'
+                    ? `You are on a Free Trial`
+                    : `You are on the ${subscriptionStatus.planType} plan`}
+                </Text>
+                {subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && (
+                  <Text style={{ fontSize: 14 }}>
+                    {subscriptionStatus.trialDaysLeft} days left in trial
+                  </Text>
+                )}
+                {subscriptionStatus.planType !== 'trial' && subscriptionStatus.status === 'active' && subscriptionStatus.trialDaysLeft === 0 && (
+                  <Text style={{ fontSize: 14 }}>
+                    Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
+                  </Text>
+                )}
+                {subscriptionStatus.isTrialExpired && (
+                  <Text style={{ fontSize: 14, color: 'red' }}>Trial expired</Text>
+                )}
+              </View>
+            </Card>
+          ) : null}
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.backButton}
-              onPress={() => onNavigate?.('welcome')}
+              onPress={handleBack}
             >
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
@@ -256,99 +320,130 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
             </Text>
           </View>
 
-          {/* Trial Highlight */}
-          <Card style={styles.trialHighlight}>
-            <View style={styles.trialContent}>
-              <Text style={styles.trialEmoji}>🎉</Text>
-              <View style={styles.trialInfo}>
-                <Text style={responsiveStyles.trialTitle}>Start your free trial today!</Text>
-                <Text style={responsiveStyles.trialSubtext}>
-                  Free until {calculateTrialEndDate()}, then $8/month
-                </Text>
-              </View>
-            </View>
-          </Card>
-
-          {/* Pricing Plans */}
-          <View style={styles.plansSection}>
-            <Text style={responsiveStyles.sectionTitle}>Choose Your Plan</Text>
-            <View style={styles.plansContainer}>
-              {plans.map((plan) => (
-                <TouchableOpacity
-                  key={plan.id}
-                  style={[
-                    styles.planCard,
-                    selectedPlan === plan.id && styles.planCardSelected,
-                    plan.popular && styles.planCardPopular
-                  ]}
-                  onPress={() => handlePlanSelect(plan.id)}
-                >
-                  {plan.badge && (
-                    <View style={[
-                      styles.planBadge,
-                      plan.popular ? styles.planBadgePopular : styles.planBadgeDefault
-                    ]}>
-                      <Text style={[
-                        styles.planBadgeText,
-                        plan.popular ? styles.planBadgeTextPopular : styles.planBadgeTextDefault
-                      ]}>
-                        {plan.badge}
+          {/* Only show plan selection if not on active paid plan */}
+          {showPaidPlans && (
+            <>
+              {showTrialOption && (
+                <Card style={styles.trialHighlight}>
+                  <View style={styles.trialContent}>
+                    <Text style={styles.trialEmoji}>🎉</Text>
+                    <View style={styles.trialInfo}>
+                      <Text style={responsiveStyles.trialTitle}>Start your free trial today!</Text>
+                      <Text style={responsiveStyles.trialSubtext}>
+                        Free until {calculateTrialEndDate()}, then $8/month
                       </Text>
                     </View>
-                  )}
-                  
-                  <View style={styles.planHeader}>
-                    <Text style={responsiveStyles.planName}>{plan.name}</Text>
-                    <View style={styles.planPricing}>
-                      <Text style={responsiveStyles.planPrice}>{plan.price}</Text>
-                      <Text style={responsiveStyles.planPeriod}>{plan.period}</Text>
-                    </View>
-                    {plan.originalPrice && (
-                      <View style={styles.savingsContainer}>
-                        <Text style={responsiveStyles.originalPrice}>{plan.originalPrice}</Text>
-                        <Text style={responsiveStyles.savings}>{plan.savings}</Text>
-                      </View>
-                    )}
                   </View>
-
-                  <View style={styles.planFeatures}>
-                    {plan.features.map((feature, index) => (
-                      <View key={index} style={styles.featureRow}>
-                        <Text style={styles.featureCheck}>✓</Text>
-                        <Text style={responsiveStyles.featureText}>{feature}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <View style={styles.planSelection}>
-                    <View style={[
-                      styles.radioButton,
-                      selectedPlan === plan.id && styles.radioButtonSelected
-                    ]}>
-                      {selectedPlan === plan.id && (
-                        <View style={styles.radioButtonInner} />
+                </Card>
+              )}
+              <View style={styles.plansSection}>
+                <Text style={responsiveStyles.sectionTitle}>Choose Your Plan</Text>
+                <View style={styles.plansContainer}>
+                  {plans.filter(plan => showTrialOption || plan.id !== 'trial').map((plan) => (
+                    <TouchableOpacity
+                      key={plan.id}
+                      style={[
+                        styles.planCard,
+                        selectedPlan === plan.id && styles.planCardSelected,
+                        plan.popular && styles.planCardPopular
+                      ]}
+                      onPress={() => handlePlanSelect(plan.id)}
+                    >
+                      {plan.badge && (
+                        <View style={[
+                          styles.planBadge,
+                          plan.popular ? styles.planBadgePopular : styles.planBadgeDefault
+                        ]}>
+                          <Text style={[
+                            styles.planBadgeText,
+                            plan.popular ? styles.planBadgeTextPopular : styles.planBadgeTextDefault
+                          ]}>
+                            {plan.badge}
+                          </Text>
+                        </View>
                       )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+                      <View style={styles.planHeader}>
+                        <Text style={responsiveStyles.planName}>{plan.name}</Text>
+                        <View style={styles.planPricing}>
+                          <Text style={responsiveStyles.planPrice}>{plan.price}</Text>
+                          <Text style={responsiveStyles.planPeriod}>{plan.period}</Text>
+                        </View>
+                        {plan.originalPrice && (
+                          <View style={styles.savingsContainer}>
+                            <Text style={responsiveStyles.originalPrice}>{plan.originalPrice}</Text>
+                            <Text style={responsiveStyles.savings}>{plan.savings}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.planFeatures}>
+                        {plan.features.map((feature, index) => (
+                          <View key={index} style={styles.featureRow}>
+                            <Text style={styles.featureCheck}>✓</Text>
+                            <Text style={responsiveStyles.featureText}>{feature}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <View style={styles.planSelection}>
+                        <View style={[
+                          styles.radioButton,
+                          selectedPlan === plan.id && styles.radioButtonSelected
+                        ]}>
+                          {selectedPlan === plan.id && (
+                            <View style={styles.radioButtonInner} />
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
 
           {/* Action Section */}
           <View style={styles.actionSection}>
-            <Button
-              title={selectedPlan === 'trial' ? 'Start Free Trial' : 'Subscribe Now'}
-              variant="primary"
-              size="lg"
-              onPress={handleContinue}
-              style={styles.primaryButton}
-            />
-            
+            {showPaidPlans && (
+              <Button
+                title={showTrialOption && selectedPlan === 'trial' ? 'Start Free Trial' : (selectedPlan === 'monthly' ? 'Subscribe Monthly' : selectedPlan === 'yearly' ? 'Subscribe Yearly' : 'Subscribe')}
+                variant="primary"
+                size="lg"
+                onPress={handleContinue}
+                style={styles.primaryButton}
+                disabled={showTrialOption && selectedPlan === 'trial' && onActiveTrial}
+              />
+            )}
+            {showManage && (
+              <Button
+                title="Manage Subscription"
+                variant="primary"
+                size="lg"
+                onPress={() => Alert.alert('Manage Subscription', 'This would open the subscription management UI.')}
+                style={styles.primaryButton}
+              />
+            )}
+            {onActiveTrial && (
+              <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
+                You are currently on a Free Trial. {subscriptionStatus.trialDaysLeft} days left.
+              </Text>
+            )}
+            {onActivePaid && (
+              <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
+                You are subscribed to the {subscriptionStatus.planType} plan. Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
+              </Text>
+            )}
+            {onCancelledOrExpiredPaid && (
+              <Text style={{ color: theme.colors.error[600], textAlign: 'center', marginTop: 8 }}>
+                Your subscription is {subscriptionStatus.status}.
+              </Text>
+            )}
+            {onExpiredTrial && (
+              <Text style={{ color: theme.colors.error[600], textAlign: 'center', marginTop: 8 }}>
+                Your trial has expired.
+              </Text>
+            )}
             <TouchableOpacity style={styles.skipButton} onPress={() => onNavigate?.('welcome')}>
               <Text style={responsiveStyles.skipButtonText}>Maybe later</Text>
             </TouchableOpacity>
-            
             <Text style={responsiveStyles.disclaimerText}>
               Cancel anytime. No commitment required.
             </Text>

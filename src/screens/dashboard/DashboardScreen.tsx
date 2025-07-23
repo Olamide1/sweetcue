@@ -73,6 +73,14 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     });
   };
 
+  // Time-of-day greeting
+  const getGreeting = () => {
+    const hour = today.getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   // Create responsive styles inside component
   const responsiveStyles = StyleSheet.create({
     scrollContent: {
@@ -206,7 +214,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.welcomeSection}>
-              <Text style={responsiveStyles.greeting}>Good morning! 👋</Text>
+              <Text style={responsiveStyles.greeting}>{getGreeting()}! 👋</Text>
               <Text style={responsiveStyles.date}>{formatDate(today)}</Text>
             </View>
             <TouchableOpacity 

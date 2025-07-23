@@ -35,3 +35,18 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Supabase CLI (if used)
+supabase/.temp/
+supabase/.output/
+supabase/migrations/.history/
+
+# Generic log files
+*.log
+
+# Editor/IDE files
+.vscode/
+*.swp
+
+# Environment files
+.env

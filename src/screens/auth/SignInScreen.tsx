@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Dimensions, Alert, Keyboard, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
+import supabase from '../../lib/supabase';
+import { partnerService } from '../../services/partners';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn';
 
@@ -14,6 +16,8 @@ interface SignInScreenProps {
 const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -85,14 +89,34 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
     },
   });
 
-  const handleSignIn = () => {
-    // TODO: Implement actual sign-in logic with backend
-    console.log('Sign in with:', { email, password });
-    
-    // For now, simulate successful login
-    if (email.trim() && password.trim()) {
-      // Call onAuthenticate to move to subscription/dashboard
-      onAuthenticate?.('Alex', email); // Mock partner name, will come from backend later
+  const handleSignIn = async () => {
+    setLoading(true); // Set loading immediately for instant feedback
+    setError(null);
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError || !data.user) {
+        setError(authError?.message || 'Login failed');
+        setLoading(false);
+        Alert.alert('Sign In Error', authError?.message || 'Login failed');
+        return;
+      }
+      // Fetch partner profile
+      const { data: partner, error: partnerError } = await partnerService.getPartner();
+      setLoading(false);
+      if (partnerError) {
+        setError(partnerError);
+        Alert.alert('Profile Error', partnerError);
+        return;
+      }
+      // Call onAuthenticate with partner name and email
+      onAuthenticate?.(partner?.name || '', email);
+    } catch (err: any) {
+      setError(err.message || 'Unexpected error');
+      setLoading(false);
+      Alert.alert('Unexpected Error', err.message || 'Unexpected error');
     }
   };
 
@@ -153,6 +177,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="next"
+                    onSubmitEditing={() => Keyboard.dismiss()}
                   />
                 </View>
 
@@ -167,6 +193,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSignIn}
                   />
                 </View>
 
@@ -184,7 +212,8 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
               size="lg"
               onPress={handleSignIn}
               style={styles.signInButton}
-              disabled={!email.trim() || !password.trim()}
+              loading={loading}
+              disabled={!email.trim() || !password.trim() || loading}
             />
             
             <View style={styles.signUpSection}>

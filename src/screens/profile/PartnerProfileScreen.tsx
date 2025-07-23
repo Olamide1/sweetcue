@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -15,6 +15,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
+import DatePicker from '../../components/DatePicker';
+import { partnerService } from '../../services/partners';
 
 interface PartnerProfile {
   name: string;
@@ -51,9 +53,34 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
     userEmail: '',
     userPassword: '',
   });
-
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
+
+  useEffect(() => {
+    // Fetch partner profile from Supabase on mount
+    const fetchProfile = async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await partnerService.getPartner();
+      if (data) {
+        setProfile(prev => ({
+          ...prev,
+          name: data.name || '',
+          keyDates: {
+            birthday: data.birthday || '',
+            anniversary: data.anniversary || '',
+          },
+          loveLanguage: data.love_language || '',
+          dislikes: data.dislikes || '',
+        }));
+      }
+      if (error) setError(error);
+      setLoading(false);
+    };
+    fetchProfile();
+  }, []);
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -131,7 +158,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!profile.name.trim()) {
       Alert.alert('Required', 'Please enter your partner\'s name');
       return;
@@ -140,10 +167,23 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
       Alert.alert('Required', 'Please enter your email and password');
       return;
     }
-    
-    // TODO: Save profile to backend
-    console.log('Creating account with profile:', profile);
-    
+    setLoading(true);
+    setError(null);
+    // Save to Supabase
+    const partnerPayload = {
+      name: profile.name,
+      birthday: profile.keyDates.birthday || undefined,
+      anniversary: profile.keyDates.anniversary || undefined,
+      loveLanguage: profile.loveLanguage,
+      dislikes: profile.dislikes,
+    };
+    const { data, error } = await partnerService.createPartner(partnerPayload);
+    setLoading(false);
+    if (error) {
+      setError(error);
+      Alert.alert('Error', error);
+      return;
+    }
     // Navigate to subscription screen with partner name and email
     onComplete?.(profile.name, profile.userEmail);
   };
@@ -186,26 +226,19 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
         {currentStep === 2 && (
           <View style={styles.datesContainer}>
             <View style={styles.dateInputGroup}>
-              <Text style={responsiveStyles.dateLabel}>Birthday</Text>
-              <TextInput
-                style={responsiveStyles.modernInput}
+              <DatePicker
+                label="Birthday"
+                value={profile.keyDates.birthday}
                 placeholder="MM/DD/YYYY"
-                placeholderTextColor={theme.colors.neutral[400]}
-                value={profile.keyDates.birthday || ''}
-                onChangeText={(text) => setProfile(prev => ({ ...prev, keyDates: { ...prev.keyDates, birthday: text } }))}
-                keyboardType="numeric"
+                onDateChange={(date) => setProfile(prev => ({ ...prev, keyDates: { ...prev.keyDates, birthday: date } }))}
               />
             </View>
-            
             <View style={styles.dateInputGroup}>
-              <Text style={responsiveStyles.dateLabel}>Anniversary (Optional)</Text>
-              <TextInput
-                style={responsiveStyles.modernInput}
+              <DatePicker
+                label="Anniversary (Optional)"
+                value={profile.keyDates.anniversary}
                 placeholder="MM/DD/YYYY"
-                placeholderTextColor={theme.colors.neutral[400]}
-                value={profile.keyDates.anniversary || ''}
-                onChangeText={(text) => setProfile(prev => ({ ...prev, keyDates: { ...prev.keyDates, anniversary: text } }))}
-                keyboardType="numeric"
+                onDateChange={(date) => setProfile(prev => ({ ...prev, keyDates: { ...prev.keyDates, anniversary: date } }))}
               />
             </View>
           </View>

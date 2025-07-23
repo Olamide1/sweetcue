@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import PartnerProfileScreen from '../screens/profile/PartnerProfileScreen';
@@ -6,6 +6,7 @@ import EditPartnerScreen from '../screens/profile/EditPartnerScreen';
 import SubscriptionScreen from '../screens/subscription/SubscriptionScreen';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
+import { subscriptionService } from '../services/subscriptions';
 
 interface RootNavigatorProps {
   isAuthenticated?: boolean;
@@ -44,26 +45,50 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       dislikes: '',
     },
   });
+  const [trialEndDate, setTrialEndDate] = useState<Date | undefined>(undefined);
+
+  // Fetch subscription status on mount and after login
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!isAuthenticated) return;
+      const status = await subscriptionService.getSubscriptionStatus();
+      setHasActiveSubscription(status.isActive && !status.isTrialExpired);
+      setUserData(prev => ({
+        ...prev,
+        subscriptionPlan: status.planType,
+      }));
+      if (status.planType === 'trial' && status.trialDaysLeft > 0 && status.hasSubscription) {
+        // Set trial end date from backend
+        const now = new Date();
+        const end = new Date();
+        end.setDate(now.getDate() + status.trialDaysLeft);
+        setTrialEndDate(end);
+      } else {
+        setTrialEndDate(undefined);
+      }
+      // Navigation logic
+      if (status.isActive && !status.isTrialExpired) {
+        setCurrentScreen('dashboard');
+      } else {
+        setCurrentScreen('subscription');
+      }
+    };
+    fetchSubscription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const handleNavigate = (screen: Screen) => {
-    console.log('Navigation requested to:', screen);
     setCurrentScreen(screen);
   };
 
-  const handleAuthentication = (partnerName?: string, email?: string) => {
+  const handleAuthentication = async (partnerName?: string, email?: string) => {
     setIsAuthenticated(true);
     setUserData(prev => ({
       ...prev,
       partnerName: partnerName || prev.partnerName,
       email: email || prev.email,
     }));
-    
-    // Check if user has subscription, if not go to subscription screen
-    if (!hasActiveSubscription) {
-      setCurrentScreen('subscription');
-    } else {
-      setCurrentScreen('dashboard');
-    }
+    // Subscription status and navigation will be handled by useEffect
   };
 
   const handleOnboardingComplete = (partnerName: string, email: string) => {
@@ -79,36 +104,22 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         dislikes: '',
       },
     }));
-    
-    // After onboarding, always go to subscription screen
-    setCurrentScreen('subscription');
+    // Navigation will be handled by useEffect
   };
 
   const handleSubscriptionComplete = (plan: 'trial' | 'monthly' | 'yearly') => {
-    const subscriptionData: Partial<UserData> = {
-      subscriptionPlan: plan,
-    };
-
-    if (plan === 'trial') {
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + 7);
-      subscriptionData.trialEndDate = trialEndDate;
-      console.log('Trial started, ends on:', trialEndDate.toDateString());
-    }
-
     setUserData(prev => ({
       ...prev,
-      ...subscriptionData,
+      subscriptionPlan: plan,
     }));
-    
     setHasActiveSubscription(true);
     setCurrentScreen('dashboard');
   };
 
   const calculateTrialDaysLeft = (): number => {
-    if (!userData.trialEndDate) return 0;
+    if (!trialEndDate) return 0;
     const today = new Date();
-    const timeDiff = userData.trialEndDate.getTime() - today.getTime();
+    const timeDiff = trialEndDate.getTime() - today.getTime();
     const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
     return Math.max(0, daysLeft);
   };
@@ -131,6 +142,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         dislikes: '',
       },
     });
+    setTrialEndDate(undefined);
     setCurrentScreen('welcome');
   };
 
@@ -140,13 +152,15 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       partnerName: profile.name, // Update main partner name too
       partnerProfile: profile,
     }));
-    console.log('Partner profile updated:', profile);
   };
 
   // If trial expired, force back to subscription screen
-  if (isAuthenticated && isTrialExpired() && currentScreen === 'dashboard') {
-    setCurrentScreen('subscription');
-  }
+  useEffect(() => {
+    if (isAuthenticated && isTrialExpired() && currentScreen === 'dashboard') {
+      setCurrentScreen('subscription');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, trialEndDate, userData.subscriptionPlan, currentScreen]);
 
   // If authenticated and subscribed, show dashboard ONLY if currentScreen is dashboard
   if (isAuthenticated && hasActiveSubscription && !isTrialExpired() && currentScreen === 'dashboard') {

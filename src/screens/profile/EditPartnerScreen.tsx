@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -16,6 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
+import { partnerService } from '../../services/partners';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner';
 
@@ -48,8 +49,33 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
 }) => {
   const [profile, setProfile] = useState<PartnerProfile>(initialProfile);
   const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    // Fetch partner profile from Supabase on mount
+    const fetchProfile = async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error } = await partnerService.getPartner();
+      if (data) {
+        setProfile({
+          name: data.name || '',
+          keyDates: {
+            birthday: data.birthday || '',
+            anniversary: data.anniversary || '',
+          },
+          loveLanguage: data.love_language || '',
+          dislikes: data.dislikes || '',
+        });
+      }
+      if (error) setError(error);
+      setLoading(false);
+    };
+    fetchProfile();
+  }, []);
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -139,12 +165,44 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!profile.name.trim()) {
       Alert.alert('Required', 'Please enter your partner\'s name');
       return;
     }
-    
+    setLoading(true);
+    setError(null);
+    // Save to Supabase
+    const { data, error } = await partnerService.getPartner();
+    let partnerId = data?.id;
+    let saveError = null;
+    if (partnerId) {
+      // Update existing
+      const { error: updateError } = await partnerService.updatePartner(partnerId, {
+        name: profile.name,
+        birthday: profile.keyDates.birthday,
+        anniversary: profile.keyDates.anniversary,
+        loveLanguage: profile.loveLanguage,
+        dislikes: profile.dislikes,
+      });
+      saveError = updateError;
+    } else {
+      // Create new
+      const { error: createError } = await partnerService.createPartner({
+        name: profile.name,
+        birthday: profile.keyDates.birthday,
+        anniversary: profile.keyDates.anniversary,
+        loveLanguage: profile.loveLanguage,
+        dislikes: profile.dislikes,
+      });
+      saveError = createError;
+    }
+    setLoading(false);
+    if (saveError) {
+      setError(saveError);
+      Alert.alert('Error', saveError);
+      return;
+    }
     onSave?.(profile);
     Alert.alert('Success', 'Partner preferences updated successfully!', [
       { text: 'OK', onPress: () => onNavigate?.('dashboard') }
@@ -305,6 +363,8 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
               size="lg"
               onPress={handleSave}
               style={styles.saveButton}
+              loading={loading}
+              disabled={loading}
             />
             
             <Button
