@@ -63,6 +63,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
       console.log('[EditPartnerScreen] Loading partner profile...');
       const { data, error } = await partnerService.getPartner();
       if (data) {
+        console.log('[EditPartnerScreen] Raw partner data from service:', data);
         setProfile({
           name: data.name || '',
           keyDates: {
@@ -72,7 +73,12 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
           loveLanguage: data.love_language || '',
           dislikes: data.dislikes || '',
         });
-        console.log('[EditPartnerScreen] Loaded partner profile:', data);
+        console.log('[EditPartnerScreen] Processed partner profile:', {
+          name: data.name,
+          birthday: data.birthday,
+          anniversary: data.anniversary,
+          love_language: data.love_language
+        });
       }
       if (error) {
         setError(error);
@@ -179,30 +185,31 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
     setLoading(true);
     setError(null);
     console.log('[EditPartnerScreen] Saving partner profile...', profile);
+    
+    // Log what we're about to save
+    const saveData = {
+      name: profile.name,
+      birthday: profile.keyDates.birthday,
+      anniversary: profile.keyDates.anniversary,
+      loveLanguage: profile.loveLanguage,
+      dislikes: profile.dislikes,
+    };
+    console.log('[EditPartnerScreen] Save data to be sent:', saveData);
+    
     // Save to Supabase
     const { data, error } = await partnerService.getPartner();
     let partnerId = data?.id;
     let saveError = null;
     if (partnerId) {
       // Update existing
-      const { error: updateError } = await partnerService.updatePartner(partnerId, {
-        name: profile.name,
-        birthday: profile.keyDates.birthday,
-        anniversary: profile.keyDates.anniversary,
-        loveLanguage: profile.loveLanguage,
-        dislikes: profile.dislikes,
-      });
+      console.log('[EditPartnerScreen] Updating existing partner with ID:', partnerId);
+      const { error: updateError } = await partnerService.updatePartner(partnerId, saveData);
       saveError = updateError;
       if (!saveError) console.log('[EditPartnerScreen] Partner updated successfully:', profile.name);
     } else {
       // Create new
-      const { error: createError } = await partnerService.createPartner({
-        name: profile.name,
-        birthday: profile.keyDates.birthday,
-        anniversary: profile.keyDates.anniversary,
-        loveLanguage: profile.loveLanguage,
-        dislikes: profile.dislikes,
-      });
+      console.log('[EditPartnerScreen] Creating new partner');
+      const { error: createError } = await partnerService.createPartner(saveData);
       saveError = createError;
       if (!saveError) console.log('[EditPartnerScreen] Partner created successfully:', profile.name);
     }
@@ -293,10 +300,20 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
             {/* Important Dates */}
             <Card style={styles.section}>
               <Text style={responsiveStyles.sectionTitle}>📅 Important Dates</Text>
+              <Text style={styles.sectionDescription}>
+                These dates will automatically appear in your reminders when they're coming up.
+              </Text>
               
               <DatePicker label="Birthday" value={profile.keyDates.birthday} onDateChange={date => handleInputChange('birthday', date)} />
               
               <DatePicker label="Anniversary" value={profile.keyDates.anniversary} onDateChange={date => handleInputChange('anniversary', date)} />
+              
+              <View style={{ backgroundColor: theme.colors.primary[50], padding: theme.spacing[3], borderRadius: theme.radius.md, marginTop: theme.spacing[2] }}>
+                <Text style={{ fontSize: 13, color: theme.colors.primary[700], fontWeight: '500' }}>🎯 How it works:</Text>
+                <Text style={{ fontSize: 13, color: theme.colors.primary[600], marginTop: 2 }}>
+                  Birthdays and anniversaries will show up in "Next 3 Days" when they're within 7 days, and in "Upcoming Reminders" when they're within 30 days.
+                </Text>
+              </View>
             </Card>
 
             {/* Love Language */}

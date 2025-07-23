@@ -117,26 +117,46 @@ class ReminderService {
         return { data: null, error: 'User not authenticated' };
       }
 
+      const now = new Date();
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + days);
+
+      console.log('[ReminderService] Getting upcoming reminders:', {
+        userId: user.id,
+        now: now.toISOString(),
+        futureDate: futureDate.toISOString(),
+        days
+      });
 
       const { data, error } = await supabase
         .from('reminders')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_completed', false)
-        .gte('scheduled_date', new Date().toISOString())
+        .gte('scheduled_date', now.toISOString())
         .lte('scheduled_date', futureDate.toISOString())
         .order('scheduled_date', { ascending: true });
 
       if (error) {
-        console.error('Get upcoming reminders error:', error.message);
+        console.error('[ReminderService] Get upcoming reminders error:', error.message);
         return { data: null, error: error.message };
+      }
+
+      console.log('[ReminderService] Found reminders:', data?.length || 0);
+      if (data && data.length > 0) {
+        data.forEach((reminder, index) => {
+          console.log(`[ReminderService] Reminder ${index + 1}:`, {
+            id: reminder.id,
+            title: reminder.title,
+            scheduled_date: reminder.scheduled_date,
+            is_completed: reminder.is_completed
+          });
+        });
       }
 
       return { data: data || [], error: null };
     } catch (error) {
-      console.error('Get upcoming reminders error:', error);
+      console.error('[ReminderService] Get upcoming reminders error:', error);
       return { data: null, error: 'An unexpected error occurred' };
     }
   }
@@ -259,10 +279,13 @@ class ReminderService {
    */
   async getUpcomingRemindersSummary(partnerData?: { name: string; birthday?: string; anniversary?: string }): Promise<UpcomingReminderSummary[]> {
     try {
+      console.log('[ReminderService] Getting upcoming reminders summary with partner data:', partnerData);
+      
       const { data: reminders } = await this.getUpcomingReminders();
       const summaries: UpcomingReminderSummary[] = [];
 
       if (reminders) {
+        console.log('[ReminderService] Found', reminders.length, 'database reminders');
         // Convert database reminders to summary format
         reminders.forEach(reminder => {
           const scheduledDate = new Date(reminder.scheduled_date);
@@ -285,19 +308,33 @@ class ReminderService {
 
       // Add partner birthday and anniversary if provided
       if (partnerData) {
+        console.log('[ReminderService] Processing partner data:', {
+          name: partnerData.name,
+          birthday: partnerData.birthday,
+          anniversary: partnerData.anniversary
+        });
+        
         const currentYear = new Date().getFullYear();
+        const today = new Date();
         
         if (partnerData.birthday) {
+          console.log('[ReminderService] Processing birthday:', partnerData.birthday);
           const birthdayThisYear = new Date(partnerData.birthday);
           birthdayThisYear.setFullYear(currentYear);
           
-          const today = new Date();
           if (birthdayThisYear < today) {
             birthdayThisYear.setFullYear(currentYear + 1);
           }
           
           const timeDiff = birthdayThisYear.getTime() - today.getTime();
           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
+          
+          console.log('[ReminderService] Birthday calculation:', {
+            originalDate: partnerData.birthday,
+            calculatedDate: birthdayThisYear.toISOString(),
+            daysUntil,
+            willShow: daysUntil <= 30
+          });
           
           if (daysUntil <= 30) {
             summaries.push({
@@ -309,20 +346,28 @@ class ReminderService {
               type: 'birthday',
               emoji: '🎂',
             });
+            console.log('[ReminderService] Added birthday reminder:', `${partnerData.name}'s Birthday (${daysUntil} days)`);
           }
         }
 
         if (partnerData.anniversary) {
+          console.log('[ReminderService] Processing anniversary:', partnerData.anniversary);
           const anniversaryThisYear = new Date(partnerData.anniversary);
           anniversaryThisYear.setFullYear(currentYear);
           
-          const today = new Date();
           if (anniversaryThisYear < today) {
             anniversaryThisYear.setFullYear(currentYear + 1);
           }
           
           const timeDiff = anniversaryThisYear.getTime() - today.getTime();
           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
+          
+          console.log('[ReminderService] Anniversary calculation:', {
+            originalDate: partnerData.anniversary,
+            calculatedDate: anniversaryThisYear.toISOString(),
+            daysUntil,
+            willShow: daysUntil <= 30
+          });
           
           if (daysUntil <= 30) {
             summaries.push({
@@ -334,14 +379,18 @@ class ReminderService {
               type: 'anniversary',
               emoji: '💕',
             });
+            console.log('[ReminderService] Added anniversary reminder: Anniversary (', daysUntil, 'days)');
           }
         }
       }
 
       // Sort by days until (most urgent first)
-      return summaries.sort((a, b) => a.daysUntil - b.daysUntil);
+      const sortedSummaries = summaries.sort((a, b) => a.daysUntil - b.daysUntil);
+      console.log('[ReminderService] Final reminders summary:', sortedSummaries.map(r => `${r.title} (${r.daysUntil}d)`));
+      
+      return sortedSummaries;
     } catch (error) {
-      console.error('Get upcoming reminders summary error:', error);
+      console.error('[ReminderService] Get upcoming reminders summary error:', error);
       return [];
     }
   }
