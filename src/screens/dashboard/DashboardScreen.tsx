@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal, Keyboard, TouchableWithoutFeedback, SafeAreaView as RNSafeAreaView, Alert, ToastAndroid, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal, Keyboard, TouchableWithoutFeedback, SafeAreaView as RNSafeAreaView, Alert, ToastAndroid, Platform, Vibration, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import EmptyState from '../../design-system/components/EmptyState';
@@ -9,6 +9,7 @@ import { reminderService } from '../../services/reminders';
 import { gestureService } from '../../services/gestures';
 import DatePicker from '../../components/DatePicker';
 import { MaterialIcons } from '@expo/vector-icons';
+import { format, isThisWeek, parseISO } from 'date-fns';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'recentActivity';
 
@@ -161,6 +162,29 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [selectedReminder, setSelectedReminder] = useState<any>(null);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [modalActionLoading, setModalActionLoading] = useState(false);
+  // Add state for calendar modal
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+
+  // Calculate streak (number of completed reminders this week)
+  const [streak, setStreak] = useState(0);
+  const [weekProgress, setWeekProgress] = useState({ completed: 0, missed: 0, total: 0 });
+  const recalculateWeekProgress = async () => {
+    const { data } = await reminderService.getReminders();
+    if (data) {
+      const now = new Date();
+      const completedThisWeek = data.filter((r: any) => r.is_completed && isThisWeek(parseISO(r.scheduled_date)));
+      const missedThisWeek = data.filter((r: any) => !r.is_completed && isThisWeek(parseISO(r.scheduled_date)) && new Date(r.scheduled_date) < now);
+      setStreak(completedThisWeek.length);
+      setWeekProgress({
+        completed: completedThisWeek.length,
+        missed: missedThisWeek.length,
+        total: completedThisWeek.length + missedThisWeek.length,
+      });
+    }
+  };
+  useEffect(() => {
+    recalculateWeekProgress();
+  }, []);
 
   // Helper to show toast/snackbar
   const showToast = (message: string) => {
@@ -254,7 +278,16 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // Split reminders into next 3 days and future reminders
   const next3DaysReminders = reminders.filter(r => r.daysUntil <= 3);
   const futureReminders = reminders.filter(r => r.daysUntil > 3);
+  // Love language emoji mapping
+  const loveLanguageEmojiMap: Record<string, string> = {
+    'Words of Affirmation': '💬',
+    'Quality Time': '⏰',
+    'Physical Touch': '🤗',
+    'Acts of Service': '🛠️',
+    'Receiving Gifts': '🎁',
+  };
   const partnerName = partnerProfile?.name || initialPartnerName;
+  const loveEmoji = loveLanguageEmojiMap[loveLanguage] || '💖';
 
   // Debug logging for reminder filtering
   console.log('[DashboardScreen] Reminder filtering:', {
@@ -267,20 +300,18 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Contextual quick actions based on next 3 days reminders
   const getContextualActions = () => {
-    const baseActions = [
-      { id: 1, title: 'Add Reminder', emoji: '➕', color: '#6366F1', priority: 1 },
-    ];
+    const baseActions = [];
 
     // Add contextual actions based on next 3 days reminders
     if (next3DaysReminders.some((r: any) => r.type === 'reminder')) {
-      baseActions.splice(1, 0, { id: 5, title: 'Send Message', emoji: '💌', color: '#10B981', priority: 2 });
+      baseActions.push({ id: 5, title: 'Send Message', emoji: '💌', color: '#10B981', priority: 2 });
     }
     
     if (next3DaysReminders.length > 0) {
-      baseActions.splice(2, 0, { id: 6, title: 'Quick Gifts', emoji: '🎁', color: '#F59E0B', priority: 3 });
+      baseActions.push({ id: 6, title: 'Quick Gifts', emoji: '🎁', color: '#F59E0B', priority: 3 });
     } else {
-      baseActions.splice(1, 0, { id: 2, title: 'View Calendar', emoji: '📅', color: '#10B981', priority: 2 });
-      baseActions.splice(2, 0, { id: 3, title: 'Gift Ideas', emoji: '🎁', color: '#F59E0B', priority: 3 });
+      baseActions.push({ id: 2, title: 'View Calendar', emoji: '📅', color: '#10B981', priority: 2 });
+      baseActions.push({ id: 3, title: 'Gift Ideas', emoji: '🎁', color: '#F59E0B', priority: 3 });
     }
 
     return baseActions.sort((a, b) => a.priority - b.priority);
@@ -292,10 +323,13 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
-  // Replace handleAddReminder with navigation
+  // Handle Add Reminder navigation robustly
   const handleAddReminder = () => {
-    if (onNavigate) {
-      onNavigate('addReminder' as any);
+    if (typeof onNavigate === 'function') {
+      onNavigate('addReminder' as Screen);
+    } else {
+      showToast('Navigation is not available. Please try again later.');
+      console.warn('onNavigate is not defined');
     }
   };
 
@@ -369,14 +403,14 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   //   });
   // };
 
-  // Handle quick action selection
+  // Handle quick action selection robustly
   const handleQuickAction = (action: number) => {
     switch (action) {
       case 1: // Add Reminder
-        if (onNavigate) onNavigate('addReminder' as any);
+        handleAddReminder();
         break;
-      case 2: // View Calendar (or Partner Profile in some cases)
-        if (onNavigate) onNavigate('editPartner');
+      case 2: // View Calendar
+        setShowCalendarModal(true);
         break;
       case 3: // Gift Ideas
         setShowQuickGiftsModal(true);
@@ -471,6 +505,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         });
         
         setReminders(remindersSummary);
+        await recalculateWeekProgress();
       } catch (refreshError: any) {
         console.error('[DashboardScreen] Error refreshing reminders after quick gift:', refreshError);
       } finally {
@@ -536,6 +571,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         const partnerData = { name, birthday, anniversary };
         const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
         setReminders(remindersSummary);
+        await recalculateWeekProgress();
       } catch (refreshError: any) {
         console.error('[DashboardScreen] Error refreshing reminders:', refreshError);
       } finally {
@@ -551,6 +587,39 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Handle reminder form save
   // const handleSaveReminder = async () => { ... } // This function was removed
+
+  // Quick Actions styles
+  const quickActionStyles = StyleSheet.create({
+    actionButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 16,
+      backgroundColor: theme.colors.background,
+      minWidth: 90,
+      minHeight: 90,
+      shadowColor: '#000',
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    iconCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    actionLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.neutral[800],
+      textAlign: 'center',
+      marginTop: 2,
+    },
+  });
 
   return (
     <View style={styles.container}>
@@ -575,19 +644,43 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           scrollEventThrottle={16}
         >
           {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.welcomeSection}>
-              <Text style={responsiveStyles.greeting}>{getGreeting()}! 👋</Text>
-              <Text style={responsiveStyles.date}>{formatDate(today)}</Text>
+          <View style={{ paddingTop: 24, paddingBottom: 24, paddingHorizontal: 0 }}>
+            <Text style={[responsiveStyles.greeting, { fontSize: 28, fontWeight: '700', marginBottom: 2 }]}>{partnerName} <Text style={{ fontSize: 26 }}>{loveEmoji}</Text></Text>
+            <Text style={[responsiveStyles.date, { fontSize: 15, color: theme.colors.neutral[500], marginBottom: 8 }]}>{formatDate(today)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: theme.colors.success[50], borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, marginTop: 2 }}>
+              <Text style={{ fontSize: 15, marginRight: 2 }}>🔥</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.success[600] }}>{streak}-day streak</Text>
             </View>
-            <TouchableOpacity 
-              style={styles.profileButton} 
-              onPress={() => setShowProfileMenu(!showProfileMenu)}
-            >
-              <Text style={styles.profileEmoji}>👤</Text>
-            </TouchableOpacity>
           </View>
-
+          {/* This Week's Progress Card */}
+          <Card style={{
+            marginBottom: theme.spacing[6],
+            backgroundColor: '#F6F8FF',
+            borderRadius: theme.radius.lg,
+            padding: theme.spacing[5],
+            shadowColor: '#000',
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.primary[700], marginBottom: 8 }}>This Week's Progress</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 16, color: theme.colors.success[600], fontWeight: '600', marginRight: 12 }}>✔️ {weekProgress.completed} Completed</Text>
+              <Text style={{ fontSize: 16, color: theme.colors.error[600], fontWeight: '600' }}>❌ {weekProgress.missed} Missed</Text>
+            </View>
+            {/* Progress Bar */}
+            <View style={{ height: 10, borderRadius: 6, backgroundColor: theme.colors.neutral[200], overflow: 'hidden', marginTop: 4 }}>
+              <View style={{
+                width: weekProgress.total > 0 ? `${(weekProgress.completed / weekProgress.total) * 100}%` : '0%',
+                height: '100%',
+                backgroundColor: theme.colors.success[500],
+                borderRadius: 6,
+              }} />
+            </View>
+            <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 6 }}>
+              {weekProgress.total === 0 ? 'No reminders completed or missed this week yet.' : `${weekProgress.completed + weekProgress.missed} total reminders this week`}
+            </Text>
+          </Card>
           {/* First-time user hint */}
           {reminders.length === 0 && !remindersLoading && (
             <Card style={styles.onboardingCard}>
@@ -602,23 +695,28 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
             </Card>
           )}
-
           {/* Next 3 Days - Immediate Priorities */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={responsiveStyles.sectionTitle}>Next 3 Days</Text>
-                <TouchableOpacity 
-                  style={styles.helpButton} 
-                  onPress={() => Alert.alert('Next 3 Days', 'Shows your most urgent reminders and upcoming birthdays/anniversaries within the next 3 days. These are your immediate priorities to focus on.')}
-                >
-                  <Text style={styles.helpIcon}>?</Text>
-                </TouchableOpacity>
-              </View>
-              {remindersLoading && <Text style={styles.urgentBadgeText}>Loading...</Text>}
+          <Card style={{
+            marginBottom: theme.spacing[6],
+            backgroundColor: '#FFF6F6',
+            borderRadius: theme.radius.lg,
+            padding: theme.spacing[5],
+            shadowColor: '#F87171',
+            shadowOpacity: 0.08,
+            shadowRadius: 12,
+            elevation: 3,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.error[600], marginRight: 8 }}>Next 3 Days</Text>
+              <TouchableOpacity
+                style={{ marginLeft: 2, backgroundColor: theme.colors.error[50], borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 }}
+                onPress={() => Alert.alert('Next 3 Days', 'Shows your most urgent reminders and upcoming birthdays/anniversaries within the next 3 days. These are your immediate priorities to focus on.')}
+              >
+                <Text style={{ color: theme.colors.error[500], fontWeight: '700', fontSize: 15 }}>?</Text>
+              </TouchableOpacity>
               {!remindersLoading && next3DaysReminders.length > 0 && (
-                <View style={styles.urgentBadge}>
-                  <Text style={styles.urgentBadgeText}>{next3DaysReminders.length}</Text>
+                <View style={{ marginLeft: 10, backgroundColor: theme.colors.error[500], borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{next3DaysReminders.length}</Text>
                 </View>
               )}
             </View>
@@ -630,7 +728,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 description={remindersError}
                 actionText="Retry"
                 onActionPress={() => {
-                  // Refetch reminders
                   setRemindersLoading(true);
                   setRemindersError(null);
                   partnerService.getPartner().then(({ data: partner, error: partnerError }) => {
@@ -653,16 +750,17 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 variant="error"
               />
             ) : next3DaysReminders.length === 0 ? (
-              <EmptyState
-                emoji="📝"
-                title="No immediate priorities!"
-                description="You're all caught up for the next 3 days. Add a new reminder or check upcoming reminders below."
-                actionText="Add Reminder"
-                onActionPress={() => handleAddReminder()}
-                variant="encouraging"
-              />
+              <View style={{ alignItems: 'center', paddingVertical: 18 }}>
+                <Text style={{ fontSize: 16, color: theme.colors.neutral[500], marginBottom: 6 }}>🎉 You're all caught up for the next 3 days!</Text>
+                <TouchableOpacity
+                  style={{ marginTop: 8, backgroundColor: theme.colors.primary[50], borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                  onPress={handleAddReminder}
+                >
+                  <Text style={{ color: theme.colors.primary[600], fontWeight: '600', fontSize: 15 }}>Add Reminder</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
-              <View style={styles.remindersContainer}>
+              <View style={{ gap: theme.spacing[3] }}>
                 {next3DaysReminders.map((reminder: any, idx: number) => (
                   <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
                     <TouchableOpacity
@@ -672,95 +770,65 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         setShowReminderModal(true);
                       }}
                     >
-                      <Card style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
-                        <View style={styles.reminderContent}>
-                          <View style={styles.reminderLeft}>
-                            <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                            <View style={styles.reminderInfo}>
-                              <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                              <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
-                                {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
-                              </Text>
-                            </View>
+                      <Card style={{
+                        backgroundColor: '#FFF',
+                        borderRadius: theme.radius.md,
+                        padding: theme.spacing[4],
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        shadowColor: '#F87171',
+                        shadowOpacity: 0.07,
+                        shadowRadius: 8,
+                        elevation: 2,
+                        marginBottom: 2,
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <Text style={{ fontSize: 24, marginRight: theme.spacing[3] }}>{reminder.emoji}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.neutral[900], marginBottom: 2 }}>{reminder.title}</Text>
+                            <Text style={{ fontSize: 14, color: theme.colors.error[500], fontWeight: '500' }}>
+                              {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
+                            </Text>
                           </View>
-                          <View style={styles.reminderRight}>
-                            <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
-                              <Text style={styles.urgentDaysUntilText}>
-                                {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
-                              </Text>
-                            </View>
-                            {/* Modern Icon Button: Complete */}
-                            {reminder.type === 'reminder' && (
-                              <TouchableOpacity
-                                style={styles.completeIconButton}
-                                activeOpacity={0.7}
-                                onPress={async () => {
-                                  next3DaysReminders[idx]._animating = true;
-                                  setReminders([...reminders]);
-                                  try {
-                                    const { error } = await reminderService.completeReminder(reminder.id);
-                                    if (error) {
-                                      showToast(error);
-                                    } else {
-                                      showToast('Marked as completed!');
-                                      setTimeout(async () => {
-                                        setRemindersLoading(true);
-                                        const { name, birthday, anniversary } = partnerProfile;
-                                        const partnerData = { name, birthday, anniversary };
-                                        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                        setReminders(remindersSummary);
-                                        setRemindersLoading(false);
-                                      }, 400);
-                                    }
-                                  } catch (err: any) {
-                                    showToast(err.message || 'Failed to complete reminder');
-                                  }
-                                }}
-                                accessibilityLabel="Mark as Completed"
-                              >
-                                <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
-                              </TouchableOpacity>
-                            )}
-                            {/* Delete Icon Button */}
+                        </View>
+                        <View style={{ alignItems: 'center' }}>
+                          <View style={{ backgroundColor: theme.colors.error[50], borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 6 }}>
+                            <Text style={{ color: theme.colors.error[500], fontWeight: '700', fontSize: 14 }}>
+                              {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
+                            </Text>
+                          </View>
+                          {reminder.type === 'reminder' && (
                             <TouchableOpacity
-                              style={[styles.completeIconButton, { marginLeft: 8 }]}
+                              style={styles.completeIconButton}
                               activeOpacity={0.7}
-                              onPress={() => {
-                                Alert.alert(
-                                  'Delete Reminder',
-                                  'Are you sure you want to delete this reminder?',
-                                  [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                      text: 'Delete',
-                                      style: 'destructive',
-                                      onPress: async () => {
-                                        try {
-                                          const { error } = await reminderService.deleteReminder(reminder.id);
-                                          if (error) {
-                                            showToast(error);
-                                          } else {
-                                            showToast('Reminder deleted');
-                                            setRemindersLoading(true);
-                                            const { name, birthday, anniversary } = partnerProfile;
-                                            const partnerData = { name, birthday, anniversary };
-                                            const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                            setReminders(remindersSummary);
-                                            setRemindersLoading(false);
-                                          }
-                                        } catch (err: any) {
-                                          showToast(err.message || 'Failed to delete reminder');
-                                        }
-                                      }
-                                    }
-                                  ]
-                                );
+                              onPress={async () => {
+                                next3DaysReminders[idx]._animating = true;
+                                setReminders([...reminders]);
+                                try {
+                                  const { error } = await reminderService.completeReminder(reminder.id);
+                                  if (error) {
+                                    showToast(error);
+                                  } else {
+                                    showToast('Marked as completed!');
+                                    setTimeout(async () => {
+                                      setRemindersLoading(true);
+                                      const { name, birthday, anniversary } = partnerProfile;
+                                      const partnerData = { name, birthday, anniversary };
+                                      const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                      setReminders(remindersSummary);
+                                      await recalculateWeekProgress();
+                                      setRemindersLoading(false);
+                                    }, 400);
+                                  }
+                                } catch (err: any) {
+                                  showToast(err.message || 'Failed to complete reminder');
+                                }
                               }}
-                              accessibilityLabel="Delete Reminder"
+                              accessibilityLabel="Mark as Completed"
                             >
-                              <MaterialIcons name="delete-outline" size={28} color={theme.colors.error[500] || '#EF4444'} />
+                              <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
                             </TouchableOpacity>
-                          </View>
+                          )}
                         </View>
                       </Card>
                     </TouchableOpacity>
@@ -768,23 +836,29 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 ))}
               </View>
             )}
-          </View>
-
-          {/* All Upcoming Reminders - Moved up for better visibility */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={responsiveStyles.sectionTitle}>Upcoming Reminders</Text>
-                <TouchableOpacity 
-                  style={styles.helpButton} 
-                  onPress={() => Alert.alert('Upcoming Reminders', 'Shows reminders, birthdays, and anniversaries coming up in the next 30 days. This helps you plan ahead for important moments.')}
-                >
-                  <Text style={styles.helpIcon}>?</Text>
-                </TouchableOpacity>
-              </View>
+          </Card>
+          {/* Upcoming Reminders */}
+          <Card style={{
+            marginBottom: theme.spacing[6],
+            backgroundColor: '#F7FAFF',
+            borderRadius: theme.radius.lg,
+            padding: theme.spacing[5],
+            shadowColor: '#60A5FA',
+            shadowOpacity: 0.07,
+            shadowRadius: 12,
+            elevation: 2,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.primary[700], marginRight: 8 }}>Upcoming Reminders</Text>
+              <TouchableOpacity
+                style={{ marginLeft: 2, backgroundColor: theme.colors.primary[50], borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 }}
+                onPress={() => Alert.alert('Upcoming Reminders', 'Shows reminders, birthdays, and anniversaries coming up in the next 30 days. This helps you plan ahead for important moments.')}
+              >
+                <Text style={{ color: theme.colors.primary[500], fontWeight: '700', fontSize: 15 }}>?</Text>
+              </TouchableOpacity>
               {!remindersLoading && futureReminders.length > 3 && (
-                <TouchableOpacity style={styles.viewAllButton} onPress={() => onNavigate?.('reminderSetup')}>
-                  <Text style={styles.viewAllText}>View All</Text>
+                <TouchableOpacity style={{ marginLeft: 10, backgroundColor: theme.colors.primary[500], borderRadius: 10, paddingHorizontal: 10, paddingVertical: 2 }} onPress={() => onNavigate?.('reminderSetup')}>
+                  <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>View All</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -796,7 +870,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 description={remindersError}
                 actionText="Retry"
                 onActionPress={() => {
-                  // Refetch reminders
                   setRemindersLoading(true);
                   setRemindersError(null);
                   partnerService.getPartner().then(({ data: partner, error: partnerError }) => {
@@ -819,40 +892,59 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 variant="error"
               />
             ) : futureReminders.length === 0 ? (
-              <EmptyState
-                emoji="🎉"
-                title="No upcoming reminders!"
-                description="Add reminders for birthdays, anniversaries, or thoughtful gestures. Shows events within the next 30 days."
-                actionText="Add Reminder"
-                onActionPress={() => handleAddReminder()}
-                variant="encouraging"
-              />
+              <View style={{ alignItems: 'center', paddingVertical: 18 }}>
+                <Text style={{ fontSize: 16, color: theme.colors.neutral[500], marginBottom: 6 }}>🎉 No upcoming reminders!</Text>
+                <TouchableOpacity
+                  style={{ marginTop: 8, backgroundColor: theme.colors.primary[50], borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                  onPress={handleAddReminder}
+                >
+                  <Text style={{ color: theme.colors.primary[600], fontWeight: '600', fontSize: 15 }}>Add Reminder</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
-              <View style={styles.remindersContainer}>
-                {futureReminders.map((reminder: any, idx: number) => (
-                  <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        setSelectedReminder(reminder);
-                        setShowReminderModal(true);
-                      }}
-                    >
-                      <Card style={styles.reminderCard}>
-                        <View style={styles.reminderContent}>
-                          <View style={styles.reminderLeft}>
-                            <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                            <View style={styles.reminderInfo}>
-                              <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                              <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
+              <View style={{ gap: theme.spacing[3] }}>
+                {futureReminders.map((reminder: any, idx: number) => {
+                  const isBirthday = reminder.type === 'birthday';
+                  const isAnniversary = reminder.type === 'anniversary';
+                  return (
+                    <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          setSelectedReminder(reminder);
+                          setShowReminderModal(true);
+                        }}
+                      >
+                        <Card style={{
+                          backgroundColor: isBirthday ? '#FFF7ED' : isAnniversary ? '#F0FDF4' : '#FFF',
+                          borderRadius: theme.radius.md,
+                          padding: theme.spacing[4],
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          shadowColor: '#60A5FA',
+                          shadowOpacity: 0.07,
+                          shadowRadius: 8,
+                          elevation: 2,
+                          marginBottom: 2,
+                          borderWidth: isBirthday || isAnniversary ? 2 : 0,
+                          borderColor: isBirthday ? theme.colors.warning[500] : isAnniversary ? theme.colors.success[500] : 'transparent',
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <Text style={{ fontSize: 24, marginRight: theme.spacing[3] }}>{reminder.emoji}</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.neutral[900], marginBottom: 2 }}>{reminder.title}</Text>
+                              <Text style={{ fontSize: 14, color: isBirthday ? theme.colors.warning[600] : isAnniversary ? theme.colors.success[600] : theme.colors.primary[600], fontWeight: '500' }}>
+                                {new Date(reminder.scheduled_date).toLocaleDateString()}
+                              </Text>
                             </View>
                           </View>
-                          <View style={styles.reminderRight}>
-                            <Text style={styles.daysUntil}>{reminder.daysUntil}d</Text>
-                            {/* Modern Icon Button */}
+                          <View style={{ alignItems: 'center' }}>
+                            <View style={{ backgroundColor: theme.colors.primary[50], borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 6 }}>
+                              <Text style={{ color: theme.colors.primary[500], fontWeight: '700', fontSize: 14 }}>{reminder.daysUntil}d</Text>
+                            </View>
                             {reminder.type === 'reminder' && (
                               <TouchableOpacity
-                                style={styles.completeIconButton}
+                                style={{ backgroundColor: theme.colors.success[50], borderRadius: 20, padding: 4, alignItems: 'center', justifyContent: 'center' }}
                                 activeOpacity={0.7}
                                 onPress={async () => {
                                   futureReminders[idx]._animating = true;
@@ -869,6 +961,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                         const partnerData = { name, birthday, anniversary };
                                         const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
                                         setReminders(remindersSummary);
+                                        await recalculateWeekProgress();
                                         setRemindersLoading(false);
                                       }, 400);
                                     }
@@ -882,89 +975,131 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                               </TouchableOpacity>
                             )}
                           </View>
-                        </View>
-                      </Card>
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
+                        </Card>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })}
               </View>
             )}
-          </View>
-
-          {/* Quick Actions - Contextual (moved after reminders for better UX) */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={responsiveStyles.sectionTitle}>
-                  {next3DaysReminders.length > 0 
-                    ? 'Quick Actions' 
-                    : 'What would you like to do?'
-                  }
-                </Text>
-                <TouchableOpacity 
-                  style={styles.helpButton} 
-                  onPress={() => Alert.alert('Quick Actions', 'Contextual actions based on your reminders. Add reminders, send messages, or get quick gift ideas to stay connected with your partner.')}
-                >
-                  <Text style={styles.helpIcon}>?</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={[styles.actionsGrid, { gap: responsive.gap }]}>
-              {contextualActions.map((action) => (
-                <TouchableOpacity 
-                  key={action.id} 
-                  onPress={() => handleQuickAction(action.id)}
-                  style={[
-                    styles.actionCard, 
-                    { 
-                      flex: 0.3, // 3 items per row, more space per item
-                      padding: responsive.actionPadding,
-                      minHeight: 80, // Ensure minimum touch target
-                    }
-                  ]}
-                >
-                  <View style={[
-                    styles.actionIcon, 
-                    { 
-                      backgroundColor: action.color,
-                      width: responsive.actionIconSize,
-                      height: responsive.actionIconSize,
-                      borderRadius: responsive.actionIconSize / 2,
-                    }
-                  ]}>
-                    <Text style={[styles.actionEmoji, { fontSize: responsive.actionIconSize * 0.45 }]}>
-                      {action.emoji}
-                    </Text>
-                  </View>
-                  <Text style={[styles.actionTitle, { fontSize: responsive.actionFontSize }]}>
-                    {action.title}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Partner Summary */}
-          <Card style={styles.partnerCard}>
-            <View style={styles.partnerInfo}>
-              <View style={styles.partnerAvatar}>
-                <Text style={styles.partnerEmoji}>👤</Text>
-              </View>
-              <View style={styles.partnerDetails}>
-                <Text style={styles.partnerName}>{partnerName}</Text>
-                <Text style={styles.partnerSubtext}>Your partner's preferences saved</Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.editButton}
-                onPress={() => {
-                  console.log('Edit button pressed - navigating to editPartner');
-                  onNavigate?.('editPartner');
-                }}
-              >
-                <Text style={styles.editButtonText}>Edit</Text>
+          </Card>
+          {/* Quick Actions */}
+          <View style={{ marginTop: 28, marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 19, fontWeight: '700', color: theme.colors.neutral[900], letterSpacing: 0.1 }}>Quick Actions</Text>
+              <TouchableOpacity style={{ marginLeft: 8, backgroundColor: theme.colors.primary[50], borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 }} onPress={() => Alert.alert('Quick Actions', 'Shortcuts to your most common actions: send a message, quick gifts, and more.') }>
+                <Text style={{ color: theme.colors.primary[400], fontWeight: '700', fontSize: 16 }}>?</Text>
               </TouchableOpacity>
             </View>
-          </Card>
+            <View style={{
+              backgroundColor: theme.colors.background,
+              borderRadius: 22,
+              padding: 18,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOpacity: 0.06,
+              shadowRadius: 12,
+              elevation: 4,
+              gap: 18,
+            }}>
+              <TouchableOpacity
+                style={quickActionStyles.actionButton}
+                onPress={() => setShowSendMessageModal(true)}
+                activeOpacity={0.85}
+                accessibilityLabel="Send Message"
+                accessibilityRole="button"
+              >
+                <View style={[quickActionStyles.iconCircle, { backgroundColor: theme.colors.success[50] }] }>
+                  <MaterialIcons name="mail" size={30} color={theme.colors.success[600]} />
+                </View>
+                <Text style={quickActionStyles.actionLabel}>Send Message</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={quickActionStyles.actionButton}
+                onPress={() => handleQuickAction(3)}
+                activeOpacity={0.85}
+                accessibilityLabel="Quick Gifts"
+                accessibilityRole="button"
+              >
+                <View style={[quickActionStyles.iconCircle, { backgroundColor: theme.colors.warning[50] }] }>
+                  <MaterialIcons name="card-giftcard" size={30} color={theme.colors.warning[600]} />
+                </View>
+                <Text style={quickActionStyles.actionLabel}>Quick Gifts</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={quickActionStyles.actionButton}
+                onPress={() => handleQuickAction(2)}
+                activeOpacity={0.85}
+                accessibilityLabel="View Calendar"
+                accessibilityRole="button"
+              >
+                <View style={[quickActionStyles.iconCircle, { backgroundColor: theme.colors.primary[50] }] }>
+                  <MaterialIcons name="calendar-today" size={30} color={theme.colors.primary[600]} />
+                </View>
+                <Text style={quickActionStyles.actionLabel}>View Calendar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* Profile Dropdown Modal (top right, elegant, correct order) */}
+          <Modal
+            visible={showProfileMenu}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={() => setShowProfileMenu(false)}
+          >
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' }} onPress={() => setShowProfileMenu(false)}>
+              <View style={{ position: 'absolute', top: 60, right: 16, minWidth: 260, backgroundColor: 'white', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 18, elevation: 16, alignItems: 'stretch' }}>
+                {/* Profile Details */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
+                  </View>
+                </View>
+                {/* Actions - Edit Profile, Recent Activity, Billing, Sign Out */}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('editPartner'); }}
+                  accessibilityLabel="Edit Partner Profile"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="edit" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Edit Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('recentActivity'); }}
+                  accessibilityLabel="Recent Activity"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="history" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Recent Activity</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.success[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('subscription'); }}
+                  accessibilityLabel="Manage Plan"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.success[600], fontWeight: '600' }}>Billing</Text>
+                </TouchableOpacity>
+                <View style={{ height: 1, backgroundColor: theme.colors.neutral[100], marginVertical: 8 }} />
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.error[50] }}
+                  onPress={() => { setShowProfileMenu(false); onLogout && onLogout(); }}
+                  accessibilityLabel="Sign Out"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="logout" size={22} color={theme.colors.error[500]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.error[600], fontWeight: '600' }}>Sign Out</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Modal>
 
           {/* Subscription Status - Moved to bottom */}
           {subscriptionPlan === 'trial' && trialDaysLeft !== undefined && (
@@ -1217,6 +1352,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                   const partnerData = { name, birthday, anniversary };
                                   const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
                                   setReminders(remindersSummary);
+                                  await recalculateWeekProgress();
                                   setRemindersLoading(false);
                                 }
                               } catch (err: any) {
@@ -1256,6 +1392,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                         const partnerData = { name, birthday, anniversary };
                                         const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
                                         setReminders(remindersSummary);
+                                        await recalculateWeekProgress();
                                         setRemindersLoading(false);
                                       }
                                     } catch (err: any) {
@@ -1373,6 +1510,58 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       {/* DatePicker Modal */}
       {/* Removed as DatePicker is now inline */}
+      <View style={{ position: 'absolute', bottom: 96, right: 24, zIndex: 100 }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            Vibration.vibrate(10);
+            handleAddReminder();
+          }}
+          accessibilityLabel="Add Reminder"
+          accessibilityRole="button"
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: theme.colors.primary[400],
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.22,
+            shadowRadius: 16,
+            elevation: 16,
+          }}
+        >
+          <MaterialIcons name="add" size={36} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      {/* View Calendar Modal */}
+      <Modal
+        visible={showCalendarModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ width: '90%', backgroundColor: 'white', borderRadius: 18, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.primary[700], marginBottom: 12 }}>View Calendar</Text>
+              {/* Placeholder for calendar UI */}
+              <View style={{ width: '100%', height: 320, backgroundColor: theme.colors.primary[50], borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ color: theme.colors.primary[400], fontSize: 16 }}>Calendar coming soon!</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCalendarModal(false)}
+                style={{ marginTop: 8, paddingVertical: 10, paddingHorizontal: 32, backgroundColor: theme.colors.primary[600], borderRadius: 8 }}
+              >
+                <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };

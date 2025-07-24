@@ -13,6 +13,8 @@ import HelpSupportScreen from '../screens/settings/HelpSupportScreen';
 import RecentActivityScreen from '../screens/activity/RecentActivityScreen';
 import { subscriptionService } from '../services/subscriptions';
 import supabase from '../lib/supabase';
+import { MaterialIcons } from '@expo/vector-icons';
+import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 
 interface RootNavigatorProps {
   isAuthenticated?: boolean;
@@ -304,17 +306,50 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
   }, [isAuthenticated, trialEndDate, userData.subscriptionPlan, currentScreen]);
 
   // If authenticated and subscribed, show dashboard ONLY if currentScreen is dashboard
-  if (isAuthenticated && hasActiveSubscription && !isTrialExpired() && currentScreen === 'dashboard') {
-    return (
-      <DashboardScreen 
-        partnerName={userData.partnerName}
-        subscriptionPlan={userData.subscriptionPlan}
-        trialDaysLeft={userData.subscriptionPlan === 'trial' ? calculateTrialDaysLeft() : undefined}
-        subscriptionStatus={subscriptionStatus}
-        onNavigate={handleNavigate}
-        onLogout={handleLogout}
-      />
-    );
+  if (isAuthenticated && hasActiveSubscription && !isTrialExpired()) {
+    switch (currentScreen) {
+      case 'dashboard':
+        return (
+          <DashboardScreen 
+            partnerName={userData.partnerName}
+            subscriptionPlan={userData.subscriptionPlan}
+            trialDaysLeft={userData.subscriptionPlan === 'trial' ? calculateTrialDaysLeft() : undefined}
+            subscriptionStatus={subscriptionStatus}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        );
+      case 'addReminder':
+        return (
+          <AddReminderScreen
+            onNavigate={handleNavigate}
+            onReminderAdded={() => setCurrentScreen('dashboard')}
+          />
+        );
+      case 'editPartner':
+        return (
+          <EditPartnerScreen
+            onNavigate={handleNavigate}
+            onSave={() => setCurrentScreen('dashboard')}
+            initialProfile={userData.partnerProfile}
+          />
+        );
+      case 'recentActivity':
+        return <RecentActivityScreen onNavigate={handleNavigate} />;
+      case 'settings':
+        return <SettingsScreen onNavigate={handleNavigate} subscriptionStatus={subscriptionStatus} />;
+      default:
+        return (
+          <DashboardScreen 
+            partnerName={userData.partnerName}
+            subscriptionPlan={userData.subscriptionPlan}
+            trialDaysLeft={userData.subscriptionPlan === 'trial' ? calculateTrialDaysLeft() : undefined}
+            subscriptionStatus={subscriptionStatus}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        );
+    }
   }
 
   // Show a loading spinner if waiting for authentication
@@ -419,5 +454,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
 
   return renderScreen();
 };
+
+// Tab bar styles removed
 
 export default RootNavigator; 
