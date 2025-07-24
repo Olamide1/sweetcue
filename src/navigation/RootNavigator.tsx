@@ -5,6 +5,7 @@ import PartnerProfileScreen from '../screens/profile/PartnerProfileScreen';
 import EditPartnerScreen from '../screens/profile/EditPartnerScreen';
 import SubscriptionScreen from '../screens/subscription/SubscriptionScreen';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
+import AddReminderScreen from '../screens/dashboard/AddReminderScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import PrivacySecurityScreen from '../screens/settings/PrivacySecurityScreen';
 import NotificationsScreen from '../screens/settings/NotificationsScreen';
@@ -17,7 +18,7 @@ interface RootNavigatorProps {
   isAuthenticated?: boolean;
 }
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
+type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'addReminder' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
 
 interface UserData {
   email: string;
@@ -348,6 +349,17 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
             userEmail={userData.email}
             partnerName={userData.partnerName}
             subscriptionStatus={subscriptionStatus}
+          />
+        );
+      case 'addReminder':
+        return (
+          <AddReminderScreen
+            onNavigate={handleNavigate}
+            onReminderAdded={() => {
+              // Force a dashboard refresh by temporarily setting currentScreen to null
+              // This will trigger the dashboard to re-render and fetch fresh data
+              setCurrentScreen('dashboard');
+            }}
           />
         );
       case 'editPartner':

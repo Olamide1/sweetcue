@@ -451,7 +451,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 variant="primary"
                 size="lg"
                 onPress={handleContinue}
-                style={styles.primaryButton}
+                style={continueLoading ? { ...styles.primaryButton, ...styles.primaryButtonDisabled } : styles.primaryButton}
                 disabled={showTrialOption && selectedPlan === 'trial' && onActiveTrial || continueLoading}
               />
             )}
@@ -789,6 +789,13 @@ const styles = StyleSheet.create({
     ...theme.elevation.lg,
     shadowColor: '#6366F1',
     shadowOpacity: 0.3,
+    opacity: 1, // Always full opacity when enabled
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5, // Only dim when actually disabled
+  },
+  primaryButtonActive: {
+    backgroundColor: '#4F46E5', // Slightly darker for pressed state
   },
   skipButton: {
     paddingVertical: theme.spacing[2],

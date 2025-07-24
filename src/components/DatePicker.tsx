@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../design-system/tokens';
 
@@ -35,10 +35,12 @@ const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   const [selectedDate, setSelectedDate] = useState<Date>(getValidDate(value));
+  const [tempDate, setTempDate] = useState<Date>(getValidDate(value));
 
   // Sync selectedDate with value prop
   useEffect(() => {
     setSelectedDate(getValidDate(value));
+    setTempDate(getValidDate(value));
   }, [value]);
 
   const formatDisplayDate = (date: Date): string => {
@@ -56,27 +58,41 @@ const DatePicker: React.FC<DatePickerProps> = ({
 
   const handleDateChange = (event: any, date?: Date) => {
     if (Platform.OS === 'android') {
-      setShowPicker(false);
-    }
-    if (date) {
-      // Edge case: If pastOnly, block future dates
-      if (pastOnly && date > new Date()) {
-        setError('Please select a past date.');
-        return;
+      if (event.type === 'set' && date) {
+        // Only update on confirm
+        setSelectedDate(date);
+        onDateChange(formatBackendDate(date));
       }
-      setError(null);
-      setSelectedDate(date);
-      const formattedDate = formatBackendDate(date);
-      onDateChange(formattedDate);
+      closePicker();
+    } else if (date) {
+      setTempDate(date);
     }
   };
 
   const openPicker = () => {
+    setTempDate(selectedDate);
     setShowPicker(true);
   };
 
   const closePicker = () => {
     setShowPicker(false);
+    setError(null);
+  };
+
+  const handleCancel = () => {
+    closePicker();
+  };
+
+  const handleDone = () => {
+    // Edge case: If pastOnly, block future dates
+    if (pastOnly && tempDate > new Date()) {
+      setError('Please select a past date.');
+      return;
+    }
+    setError(null);
+    setSelectedDate(tempDate);
+    onDateChange(formatBackendDate(tempDate));
+    closePicker();
   };
 
   // Determine min/max date
@@ -93,24 +109,55 @@ const DatePicker: React.FC<DatePickerProps> = ({
         <Text style={styles.icon}>📅</Text>
       </TouchableOpacity>
       {error && <Text style={styles.errorText}>{error}</Text>}
-      {showPicker && (
-        <DateTimePicker
-          value={selectedDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleDateChange}
-          minimumDate={min}
-          maximumDate={max}
-        />
-      )}
+      {/* iOS Custom Modal */}
       {Platform.OS === 'ios' && showPicker && (
-        <View style={styles.iosPickerContainer}>
-          <View style={styles.iosPickerHeader}>
-            <TouchableOpacity onPress={closePicker} accessibilityLabel="Done">
-              <Text style={styles.iosPickerButton}>Done</Text>
-            </TouchableOpacity>
+        <Modal visible transparent animationType="slide" onRequestClose={closePicker}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={handleCancel} style={styles.modalHeaderButton} accessibilityLabel="Cancel">
+                  <Text style={styles.modalHeaderButtonText}>✕</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={handleDone} style={styles.modalHeaderButton} accessibilityLabel="Done">
+                  <Text style={styles.modalHeaderButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+                minimumDate={min}
+                maximumDate={max}
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
-        </View>
+        </Modal>
+      )}
+      {/* Android Custom Modal */}
+      {Platform.OS === 'android' && showPicker && (
+        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContentAndroid}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={handleCancel} style={styles.modalHeaderButton} accessibilityLabel="Cancel">
+                  <Text style={styles.modalHeaderButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+                minimumDate={min}
+                maximumDate={max}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -148,28 +195,50 @@ const styles = StyleSheet.create({
   icon: {
     fontSize: 20,
   },
-  iosPickerContainer: {
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.neutral[200],
-  },
-  iosPickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.neutral[200],
-  },
-  iosPickerButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.primary[600],
-  },
   errorText: {
     color: theme.colors.error[600],
     fontSize: 13,
     marginTop: 4,
     marginBottom: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+    paddingTop: 0,
+    minHeight: 320,
+  },
+  modalContentAndroid: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    margin: 24,
+    paddingBottom: 24,
+    paddingTop: 0,
+    minHeight: 320,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.neutral[200],
+  },
+  modalHeaderButton: {
+    padding: 8,
+  },
+  modalHeaderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary[600],
   },
 });
 

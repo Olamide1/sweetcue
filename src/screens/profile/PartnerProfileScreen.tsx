@@ -419,7 +419,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
                 variant="primary"
                 size="lg"
                 onPress={handleNext}
-                style={styles.continueButton}
+                style={loading ? { ...styles.continueButton, ...styles.continueButtonDisabled } : styles.continueButton}
                 disabled={loading}
                 loading={loading}
               />
@@ -613,6 +613,13 @@ const styles = StyleSheet.create({
     ...theme.elevation.lg,
     shadowColor: '#6366F1',
     shadowOpacity: 0.3,
+    opacity: 1, // Always full opacity when enabled
+  },
+  continueButtonDisabled: {
+    opacity: 0.5, // Only dim when actually disabled
+  },
+  continueButtonActive: {
+    backgroundColor: '#4F46E5', // Slightly darker for pressed state
   },
 });
 

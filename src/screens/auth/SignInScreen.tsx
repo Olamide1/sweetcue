@@ -211,7 +211,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
               variant="primary"
               size="lg"
               onPress={handleSignIn}
-              style={styles.signInButton}
+              style={!email.trim() || !password.trim() || loading ? { ...styles.signInButton, ...styles.signInButtonDisabled } : styles.signInButton}
               loading={loading}
               disabled={!email.trim() || !password.trim() || loading}
             />
@@ -319,6 +319,10 @@ const styles = StyleSheet.create({
     ...theme.elevation.lg,
     shadowColor: '#6366F1',
     shadowOpacity: 0.3,
+    opacity: 1, // Always full opacity when enabled
+  },
+  signInButtonDisabled: {
+    opacity: 0.5, // Only dim when actually disabled
   },
   signUpSection: {
     flexDirection: 'row',

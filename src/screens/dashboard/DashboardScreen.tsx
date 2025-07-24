@@ -131,22 +131,33 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [reminders, setReminders] = useState<any[]>([]);
   const [remindersLoading, setRemindersLoading] = useState(true);
   const [remindersError, setRemindersError] = useState<string | null>(null);
-  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
-  const [gestureTemplates, setGestureTemplates] = useState<any[]>([]);
-  const [gestureLoading, setGestureLoading] = useState(false);
-  const [gestureError, setGestureError] = useState<string | null>(null);
-  const [gestureSearch, setGestureSearch] = useState('');
-  const [selectedGesture, setSelectedGesture] = useState<any>(null);
-  const [reminderForm, setReminderForm] = useState({ title: '', description: '', scheduled_date: '' });
-  const [reminderSaving, setReminderSaving] = useState(false);
-  const [reminderError, setReminderError] = useState<string | null>(null);
+  // State for Add Reminder and DatePicker modals
+  // const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  // const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  // const [pendingReminderForm, setPendingReminderForm] = useState({ title: '', description: '', scheduled_date: '' });
+  // const [gestureTemplates, setGestureTemplates] = useState<any[]>([]);
+  // const [gestureLoading, setGestureLoading] = useState(false);
+  // const [gestureError, setGestureError] = useState<string | null>(null);
+  // const [gestureSearch, setGestureSearch] = useState('');
+  // const [selectedGesture, setSelectedGesture] = useState<any>(null);
+  // const [reminderForm, setReminderForm] = useState({ title: '', description: '', scheduled_date: '' });
+  // const [reminderSaving, setReminderSaving] = useState(false);
+  // const [reminderError, setReminderError] = useState<string | null>(null);
+  // Restore Quick Gifts and Send Message modal state
   const [showSendMessageModal, setShowSendMessageModal] = useState(false);
   const [showQuickGiftsModal, setShowQuickGiftsModal] = useState(false);
   const [messageForm, setMessageForm] = useState({ message: '', scheduled_date: '' });
   const [messageSaving, setMessageSaving] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
+  // const [showSendMessageModal, setShowSendMessageModal] = useState(false);
+  // const [showQuickGiftsModal, setShowQuickGiftsModal] = useState(false);
+  // const [messageForm, setMessageForm] = useState({ message: '', scheduled_date: '' });
+  // const [messageSaving, setMessageSaving] = useState(false);
+  // const [messageError, setMessageError] = useState<string | null>(null);
   const loveLanguage = partnerProfile?.love_language || '';
-  const [accountDeleted, setAccountDeleted] = useState(false);
+  // const [accountDeleted, setAccountDeleted] = useState(false);
+  // Remove showDatePicker modal logic and use inline state
+  // const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Helper to show toast/snackbar
   const showToast = (message: string) => {
@@ -194,9 +205,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           (err.message && err.message.includes('JSON object requested, multiple (or no) rows returned')) ||
           (err.code && err.code === 'PGRST116')
         ) {
-          setAccountDeleted(true);
-          alert('No account found with that information. Please sign up.');
-          if (typeof onNavigate === 'function') onNavigate('welcome');
+          // setAccountDeleted(true); // This line was removed
+          // alert('No account found with that information. Please sign up.'); // This line was removed
+          // if (typeof onNavigate === 'function') onNavigate('welcome'); // This line was removed
           return;
         }
         console.error('[DashboardScreen] Error in fetchData:', err);
@@ -206,10 +217,36 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
     };
     fetchData();
-    return () => { isMounted = false; };
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array means this runs once on mount
 
-  if (accountDeleted) return null;
+  // Add a separate effect to refetch data when screen is focused (for navigation back from AddReminder)
+  useEffect(() => {
+    const refetchData = async () => {
+      if (!partnerProfile) return; // Don't refetch if partner profile isn't loaded yet
+      
+      console.log('[DashboardScreen] Refetching reminders after navigation...');
+      setRemindersLoading(true);
+      try {
+        const { name, birthday, anniversary } = partnerProfile;
+        const partnerData = { name, birthday, anniversary };
+        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+        console.log('[DashboardScreen] Refreshed reminders:', remindersSummary.length, 'items');
+        setReminders(remindersSummary);
+      } catch (err: any) {
+        console.error('[DashboardScreen] Error refetching reminders:', err);
+      } finally {
+        setRemindersLoading(false);
+      }
+    };
+
+    // Refetch data when component mounts (this will catch navigation back from AddReminder)
+    refetchData();
+  }, [partnerProfile]); // This will run when partnerProfile changes (after initial load)
+
+  // if (accountDeleted) return null; // This line was removed
 
   // Split reminders into next 3 days and future reminders
   const next3DaysReminders = reminders.filter(r => r.daysUntil <= 3);
@@ -252,28 +289,11 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
-  // Open Add Reminder modal and fetch gestures
+  // Replace handleAddReminder with navigation
   const handleAddReminder = () => {
-    setShowAddReminderModal(true);
-    setGestureLoading(true);
-    setGestureError(null);
-    console.log('[DashboardScreen] Opening Add Reminder modal...');
-    
-    gestureService.getTemplates().then(({ data, error }) => {
-      if (error) {
-        console.error('[DashboardScreen] Error loading gesture templates:', error);
-        setGestureError(error);
-      } else {
-        console.log('[DashboardScreen] Loaded gesture templates:', data?.length || 0);
-        setGestureTemplates(data || []);
-      }
-      setGestureLoading(false);
-    });
-    
-    setGestureSearch('');
-    setSelectedGesture(null);
-    setReminderForm({ title: '', description: '', scheduled_date: '' });
-    setReminderError(null);
+    if (onNavigate) {
+      onNavigate('addReminder' as any);
+    }
   };
 
   // Fallback gesture templates in case database is empty
@@ -321,42 +341,39 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   ];
 
   // Use database templates or fallback templates
-  const availableGestures = gestureTemplates.length > 0 ? gestureTemplates : fallbackGestures;
+  const availableGestures = fallbackGestures; // Removed gestureTemplates.length > 0 ? gestureTemplates : fallbackGestures;
 
   // Filter gestures for love language recommendations
   const recommendedGestures = availableGestures.filter(g =>
     loveLanguage && g.category && g.category.toLowerCase().includes(loveLanguage.toLowerCase().replace(/ /g, '_'))
   );
   const otherGestures = availableGestures.filter(g => !recommendedGestures.includes(g));
-  const searchedGestures = gestureSearch
-    ? availableGestures.filter(g =>
-        g.title.toLowerCase().includes(gestureSearch.toLowerCase()) ||
-        g.description?.toLowerCase().includes(gestureSearch.toLowerCase())
-      )
-    : availableGestures;
+  // const searchedGestures = gestureSearch
+  //   ? availableGestures.filter(g =>
+  //       g.title.toLowerCase().includes(gestureSearch.toLowerCase()) ||
+  //       g.description?.toLowerCase().includes(gestureSearch.toLowerCase())
+  //     )
+  //   : availableGestures;
 
   // Handle gesture selection
-  const handleSelectGesture = (gesture: any) => {
-    console.log('[DashboardScreen] Selected gesture:', gesture);
-    setSelectedGesture(gesture);
-    setReminderForm({
-      title: gesture.title,
-      description: gesture.description || '',
-      scheduled_date: '',
-    });
-  };
+  // const handleSelectGesture = (gesture: any) => {
+  //   console.log('[DashboardScreen] Selected gesture:', gesture);
+  //   setSelectedGesture(gesture);
+  //   setReminderForm({
+  //     title: gesture.title,
+  //     description: gesture.description || '',
+  //     scheduled_date: '',
+  //   });
+  // };
 
   // Handle quick action selection
-  const handleQuickAction = (actionId: number) => {
-    console.log('[DashboardScreen] Quick action selected:', actionId);
-    
-    switch (actionId) {
+  const handleQuickAction = (action: number) => {
+    switch (action) {
       case 1: // Add Reminder
-        handleAddReminder();
+        if (onNavigate) onNavigate('addReminder' as any);
         break;
-      case 2: // View Calendar
-        console.log('[DashboardScreen] View Calendar action - TODO: implement calendar view');
-        // TODO: Implement calendar view
+      case 2: // View Calendar (or Partner Profile in some cases)
+        if (onNavigate) onNavigate('editPartner');
         break;
       case 3: // Gift Ideas
         setShowQuickGiftsModal(true);
@@ -370,51 +387,39 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         setShowQuickGiftsModal(true);
         break;
       default:
-        console.log('[DashboardScreen] Unknown action ID:', actionId);
+        break;
     }
   };
 
   // Handle quick gift selection
-  const handleQuickGift = async (giftName: string, giftType: string) => {
-    console.log('[DashboardScreen] Creating quick gift:', giftName, giftType);
-    
-    if (!partnerProfile || !partnerProfile.id) {
-      console.error('[DashboardScreen] No partner profile found for quick gift');
-      return;
-    }
-
+  const handleQuickGift = async (giftName: string, giftType: 'flower' | 'food' | 'gift') => {
     try {
-      let gestureId = null;
-      
-      // Try to create a gesture first (if RLS policies are fixed)
-      try {
-        const gestureInput = {
-          partner_id: partnerProfile.id,
-          title: giftType === 'food' ? `Order ${giftName}` : `Buy ${giftName}`,
-          description: `Surprise ${partnerName} with ${giftName.toLowerCase()}`,
-          effort_level: 'low',
-          cost_level: giftType === 'food' ? 'low' : 'medium',
-          category: 'receiving_gifts',
-          is_template: false,
-        };
-
-        console.log('[DashboardScreen] Creating gesture for gift:', gestureInput);
-        
-        const { data: createdGesture, error: gestureError } = await gestureService.createGesture(gestureInput);
-        
-        if (gestureError) {
-          console.error('[DashboardScreen] Error creating gesture for gift:', gestureError);
-          // Continue without gesture - this is expected if RLS policies aren't fixed yet
-        } else {
-          gestureId = createdGesture?.id;
-          console.log('[DashboardScreen] Gesture created successfully:', createdGesture?.title);
-        }
-      } catch (gestureErr: any) {
-        console.error('[DashboardScreen] Gesture creation failed (RLS issue?):', gestureErr);
-        // Continue without gesture
+      if (!partnerProfile || !partnerProfile.id) {
+        console.error('[DashboardScreen] No partner profile found for quick gift');
+        return;
       }
 
-      // Create the reminder for tomorrow to ensure it shows up in upcoming reminders
+      // Create a gesture for the gift
+      const gestureData = {
+        partner_id: partnerProfile.id,
+        title: giftType === 'food' ? `Order ${giftName}` : `Buy ${giftName}`,
+        description: `Surprise ${partnerName} with ${giftName.toLowerCase()}`,
+        effort_level: 'low',
+        cost_level: giftType === 'flower' ? 'low' : giftType === 'food' ? 'medium' : 'high',
+        category: giftType === 'flower' ? 'receiving_gifts' : giftType === 'food' ? 'acts_of_service' : 'receiving_gifts',
+        is_template: false,
+      };
+
+      const { data: gesture, error: gestureError } = await gestureService.createGesture(gestureData);
+      
+      if (gestureError) {
+        console.error('[DashboardScreen] Error creating gesture for gift:', gestureError);
+        return;
+      }
+
+      const gestureId = gesture?.id;
+
+      // Create a reminder for tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(12, 0, 0, 0); // Set to noon tomorrow
@@ -542,116 +547,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   };
 
   // Handle reminder form save
-  const handleSaveReminder = async () => {
-    setReminderSaving(true);
-    setReminderError(null);
-    console.log('[DashboardScreen] Saving reminder...', { selectedGesture, reminderForm });
-    
-    try {
-      if (!partnerProfile || !partnerProfile.id) {
-        const error = 'Partner profile not loaded. Please refresh or complete your profile.';
-        setReminderError(error);
-        console.error('[DashboardScreen] No partner profile found');
-        setReminderSaving(false);
-        return;
-      }
-      
-      if (!reminderForm.title || !reminderForm.scheduled_date) {
-        const error = 'Title and date are required.';
-        setReminderError(error);
-        console.error('[DashboardScreen] Missing required fields:', { title: reminderForm.title, date: reminderForm.scheduled_date });
-        setReminderSaving(false);
-        return;
-      }
-
-      let gestureId = null;
-      let customGestureCreated = false;
-
-      // Handle custom gesture creation
-      if (!selectedGesture || selectedGesture.id?.startsWith('fallback-')) {
-        // This is a custom gesture - create it in the database first
-        if (reminderForm.title && reminderForm.description) {
-          console.log('[DashboardScreen] Creating custom gesture...');
-          
-          // Determine category based on partner's love language
-          const category = partnerProfile.love_language 
-            ? partnerProfile.love_language.toLowerCase().replace(/ /g, '_')
-            : 'romance';
-          
-          const customGestureData = {
-            partner_id: partnerProfile.id,
-            title: reminderForm.title,
-            description: reminderForm.description,
-            effort_level: 'medium', // Default for custom gestures
-            cost_level: 'low', // Default for custom gestures
-            category: category,
-            is_template: false, // This is a user-created gesture, not a template
-          };
-
-          const { data: gestureData, error: gestureError } = await gestureService.createGesture(customGestureData);
-          
-          if (gestureError) {
-            console.error('[DashboardScreen] Error creating custom gesture:', gestureError);
-            // Continue without gesture_id - just save the reminder
-          } else {
-            gestureId = gestureData?.id;
-            customGestureCreated = true;
-            console.log('[DashboardScreen] Custom gesture created successfully:', gestureData?.title);
-          }
-        }
-      } else {
-        // This is a template gesture
-        gestureId = selectedGesture.id;
-      }
-
-      // Prepare reminder data
-      const reminderData = {
-        partner_id: partnerProfile.id,
-        gesture_id: gestureId,
-        title: reminderForm.title,
-        description: reminderForm.description || '',
-        scheduled_date: reminderForm.scheduled_date,
-      };
-
-      console.log('[DashboardScreen] Creating reminder with data:', reminderData);
-      
-      const { data, error } = await reminderService.createReminder(reminderData);
-      
-      if (error) {
-        console.error('[DashboardScreen] Error creating reminder:', error);
-        setReminderError(error);
-        setReminderSaving(false);
-        return;
-      }
-
-      console.log('[DashboardScreen] Reminder created successfully:', data?.title);
-      
-      // Close modal and refresh reminders
-      setShowAddReminderModal(false);
-      setReminderSaving(false);
-      
-      // Refetch reminders
-      setRemindersLoading(true);
-      setRemindersError(null);
-      try {
-        const { name, birthday, anniversary } = partnerProfile;
-        const partnerData = { name, birthday, anniversary };
-        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-        setReminders(remindersSummary);
-        console.log('[DashboardScreen] Refreshed reminders:', remindersSummary.length);
-      } catch (refreshError: any) {
-        console.error('[DashboardScreen] Error refreshing reminders:', refreshError);
-        setRemindersError('Reminder saved but failed to refresh list');
-      } finally {
-        setRemindersLoading(false);
-      }
-      
-    } catch (err: any) {
-      console.error('[DashboardScreen] Unexpected error saving reminder:', err);
-      setReminderError(err.message || 'Failed to save reminder.');
-      setReminderSaving(false);
-    }
-  };
+  // const handleSaveReminder = async () => { ... } // This function was removed
 
   return (
     <View style={styles.container}>
@@ -1110,126 +1006,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </Card>
           )}
 
-          {/* Add Reminder Modal */}
-          {showAddReminderModal && (
-            <Modal visible onRequestClose={() => setShowAddReminderModal(false)} animationType="slide" transparent>
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' }}>
-                  <RNSafeAreaView style={{ width: '100%', alignItems: 'center', flex: 1 }}>
-                    <Card style={{ width: '95%', maxWidth: 420, maxHeight: '90%', padding: 0, marginTop: 16, marginBottom: 16 }}>
-                      <ScrollView contentContainerStyle={{ padding: theme.spacing[5], paddingTop: theme.spacing[6] }} showsVerticalScrollIndicator={false}>
-                        <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: theme.spacing[2] }}>Add Reminder</Text>
-                        <Text style={{ color: theme.colors.neutral[600], marginBottom: theme.spacing[3], fontSize: 15 }}>
-                          Choose a gesture idea or type your own. You can customize any suggestion or create something completely new.
-                        </Text>
-                        <View style={{ backgroundColor: theme.colors.primary[50], padding: theme.spacing[3], borderRadius: theme.radius.md, marginBottom: theme.spacing[3] }}>
-                          <Text style={{ fontSize: 13, color: theme.colors.primary[700], fontWeight: '500' }}>💡 Tip:</Text>
-                          <Text style={{ fontSize: 13, color: theme.colors.primary[600], marginTop: 2 }}>
-                            Reminders help you remember important moments. They'll appear in "Next 3 Days" when urgent, or "Upcoming Reminders" for future planning.
-                          </Text>
-                        </View>
-                        {/* Gesture Recommendations */}
-                        {gestureLoading ? (
-                          <EmptyState title="Loading gesture ideas..." description="Fetching gesture templates for inspiration." />
-                        ) : gestureError ? (
-                          <EmptyState title="Couldn't load gestures" description={gestureError} actionText="Retry" onActionPress={handleAddReminder} variant="error" />
-                        ) : gestureTemplates.length === 0 ? (
-                          <EmptyState title="No gesture templates found" description="Try adding your own custom gesture." />
-                        ) : (
-                          <>
-                            {loveLanguage && recommendedGestures.length > 0 && (
-                              <View style={{ marginBottom: theme.spacing[3] }}>
-                                <Text style={{ fontWeight: '600', marginBottom: theme.spacing[2] }}>Recommended for {loveLanguage}:</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: theme.spacing[2] }}>
-                                  {recommendedGestures.map((g) => (
-                                    <Card key={g.id} style={{ marginRight: theme.spacing[3], minWidth: 160, maxWidth: 200, borderColor: selectedGesture?.id === g.id ? theme.colors.primary[500] : theme.colors.neutral[200], borderWidth: selectedGesture?.id === g.id ? 2 : 1, backgroundColor: selectedGesture?.id === g.id ? theme.colors.primary[50] : 'white' }}>
-                                      <TouchableOpacity onPress={() => handleSelectGesture(g)} style={{ padding: theme.spacing[3], alignItems: 'flex-start' }}>
-                                        <Text style={{ fontWeight: '600', fontSize: 16, marginBottom: theme.spacing[1] }}>{g.title}</Text>
-                                        <Text style={{ color: theme.colors.neutral[700], fontSize: 13 }}>{g.description}</Text>
-                                        {selectedGesture?.id === g.id && <Text style={{ position: 'absolute', top: 8, right: 8, fontSize: 18, color: theme.colors.primary[500] }}>✔️</Text>}
-                                      </TouchableOpacity>
-                                    </Card>
-                                  ))}
-                                </ScrollView>
-                              </View>
-                            )}
-                            {/* Search Bar */}
-                            <Card style={{ padding: theme.spacing[2], flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing[3], backgroundColor: theme.colors.neutral[50] }}>
-                              <Text style={{ fontSize: 16, color: theme.colors.neutral[700], marginRight: theme.spacing[2] }}>🔍</Text>
-                              <TextInput
-                                style={{ flex: 1, fontSize: 16, color: theme.colors.neutral[900] }}
-                                placeholder="Search gestures or ideas..."
-                                value={gestureSearch}
-                                onChangeText={setGestureSearch}
-                                placeholderTextColor={theme.colors.neutral[400]}
-                                accessibilityLabel="Search gestures or ideas"
-                              />
-                              {gestureSearch.length > 0 && (
-                                <TouchableOpacity onPress={() => setGestureSearch('')}>
-                                  <Text style={{ fontSize: 18, color: theme.colors.neutral[400] }}>✕</Text>
-                                </TouchableOpacity>
-                              )}
-                            </Card>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: theme.spacing[3] }}>
-                              {searchedGestures.filter(g => !recommendedGestures.some(rg => rg.id === g.id)).map((g) => (
-                                <Card key={g.id} style={{ marginRight: theme.spacing[3], minWidth: 160, maxWidth: 200, borderColor: selectedGesture?.id === g.id ? theme.colors.primary[500] : theme.colors.neutral[200], borderWidth: selectedGesture?.id === g.id ? 2 : 1, backgroundColor: selectedGesture?.id === g.id ? theme.colors.primary[50] : 'white' }}>
-                                  <TouchableOpacity onPress={() => handleSelectGesture(g)} style={{ padding: theme.spacing[3], alignItems: 'flex-start' }}>
-                                    <Text style={{ fontWeight: '600', fontSize: 16, marginBottom: theme.spacing[1] }}>{g.title}</Text>
-                                    <Text style={{ color: theme.colors.neutral[700], fontSize: 13 }}>{g.description}</Text>
-                                    {selectedGesture?.id === g.id && <Text style={{ position: 'absolute', top: 8, right: 8, fontSize: 18, color: theme.colors.primary[500] }}>✔️</Text>}
-                                  </TouchableOpacity>
-                                </Card>
-                              ))}
-                            </ScrollView>
-                          </>
-                        )}
-                        {/* Reminder Form */}
-                        <View style={{ marginBottom: theme.spacing[3] }}>
-                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Title</Text>
-                          <TextInput
-                            style={{ backgroundColor: theme.colors.neutral[50], borderRadius: 8, padding: 10, fontSize: 16, marginBottom: theme.spacing[2] }}
-                            placeholder={selectedGesture ? "Customize the title..." : "What do you want to remember?"}
-                            value={reminderForm.title}
-                            onChangeText={text => {
-                              setReminderForm(f => ({ ...f, title: text }));
-                              // If user starts typing a custom title, clear the selected gesture
-                              if (selectedGesture && text !== selectedGesture.title) {
-                                setSelectedGesture(null);
-                              }
-                            }}
-                            placeholderTextColor={theme.colors.neutral[400]}
-                            accessibilityLabel="Reminder Title"
-                          />
-                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Description</Text>
-                          <TextInput
-                            style={{ backgroundColor: theme.colors.neutral[50], borderRadius: 8, padding: 10, fontSize: 15, marginBottom: theme.spacing[2], minHeight: 40 }}
-                            placeholder={selectedGesture ? "Add more details..." : "Optional details..."}
-                            value={reminderForm.description}
-                            onChangeText={text => {
-                              setReminderForm(f => ({ ...f, description: text }));
-                              // If user starts typing a custom description, clear the selected gesture
-                              if (selectedGesture && text !== selectedGesture.description) {
-                                setSelectedGesture(null);
-                              }
-                            }}
-                            placeholderTextColor={theme.colors.neutral[400]}
-                            multiline
-                            accessibilityLabel="Reminder Description"
-                          />
-                          <Text style={{ fontWeight: '600', marginBottom: theme.spacing[1] }}>Date</Text>
-                          <DatePicker label="Date" value={reminderForm.scheduled_date} onDateChange={date => setReminderForm(f => ({ ...f, scheduled_date: date }))} />
-                        </View>
-                        {reminderError && <Text style={{ color: theme.colors.error[600], marginBottom: theme.spacing[2] }}>{reminderError}</Text>}
-                        <Button title={reminderSaving ? 'Saving...' : 'Save Reminder'} onPress={handleSaveReminder} disabled={reminderSaving} />
-                        <Button title="Cancel" onPress={() => setShowAddReminderModal(false)} variant="ghost" />
-                      </ScrollView>
-                    </Card>
-                  </RNSafeAreaView>
-                </View>
-              </TouchableWithoutFeedback>
-            </Modal>
-          )}
-
           {/* Send Message Modal */}
           {showSendMessageModal && (
             <Modal visible onRequestClose={() => setShowSendMessageModal(false)} animationType="slide" transparent>
@@ -1265,7 +1041,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         </View>
                         
                         {messageError && <Text style={{ color: theme.colors.error[600], marginBottom: theme.spacing[2] }}>{messageError}</Text>}
-                        <Button title={messageSaving ? 'Sending...' : 'Send Message'} onPress={handleSendMessage} disabled={messageSaving} />
+                        <Button
+                          title={messageSaving ? 'Sending...' : 'Send Message'}
+                          onPress={handleSendMessage}
+                          style={messageSaving ? { ...styles.primaryButton, ...styles.primaryButtonDisabled } : styles.primaryButton}
+                          disabled={messageSaving}
+                        />
                         <Button title="Cancel" onPress={() => setShowSendMessageModal(false)} variant="ghost" />
                       </ScrollView>
                     </Card>
@@ -1454,6 +1235,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           />
         </ScrollView>
       </SafeAreaView>
+
+      {/* DatePicker Modal */}
+      {/* Removed as DatePicker is now inline */}
     </View>
   );
 };
@@ -1828,6 +1612,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
 },
+  primaryButton: {
+    backgroundColor: '#6366F1',
+    borderRadius: 16,
+    paddingVertical: 18,
+    ...theme.elevation.lg,
+    shadowColor: '#6366F1',
+    shadowOpacity: 0.3,
+    opacity: 1, // Always full opacity when enabled
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5, // Only dim when actually disabled
+  },
+  primaryButtonActive: {
+    backgroundColor: '#4F46E5', // Slightly darker for pressed state
+  },
 });
 
 export default DashboardScreen; 

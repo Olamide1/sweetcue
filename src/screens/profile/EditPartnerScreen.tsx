@@ -85,6 +85,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
         console.error('[EditPartnerScreen] Error loading partner profile:', error);
       }
       setLoading(false);
+      setHasChanges(false);
     };
     fetchProfile();
   }, []);
@@ -214,6 +215,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
       if (!saveError) console.log('[EditPartnerScreen] Partner created successfully:', profile.name);
     }
     setLoading(false);
+    setHasChanges(false);
     if (saveError) {
       setError(saveError);
       console.error('[EditPartnerScreen] Error saving partner profile:', saveError);
@@ -368,13 +370,17 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
           {/* Action Buttons */}
           <View style={styles.actionSection}>
             <Button
-              title="Save Changes"
+              title={loading ? 'Saving...' : 'Save Changes'}
               variant="primary"
               size="lg"
               onPress={handleSave}
-              style={styles.saveButton}
+              style={StyleSheet.flatten([
+                styles.saveButton,
+                (loading || !hasChanges || !profile.name.trim()) && { backgroundColor: theme.colors.primary[200], opacity: 0.5 }
+              ])}
+              textStyle={{ color: (loading || !hasChanges || !profile.name.trim()) ? theme.colors.primary[600] : 'white', fontWeight: '700' }}
               loading={loading}
-              disabled={loading}
+              disabled={loading || !hasChanges || !profile.name.trim()}
             />
             
             <Button
@@ -472,11 +478,11 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
   },
   saveButton: {
-    backgroundColor: theme.colors.primary[400],
+    backgroundColor: theme.colors.primary[600],
     borderRadius: theme.radius.lg,
     paddingVertical: 18,
     ...theme.elevation.lg,
-    shadowColor: theme.colors.primary[400],
+    shadowColor: theme.colors.primary[600],
     shadowOpacity: 0.3,
   },
   cancelButton: {

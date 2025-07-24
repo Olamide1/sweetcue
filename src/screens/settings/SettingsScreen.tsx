@@ -366,15 +366,39 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate, subscriptio
             </Text>
             <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
               <TouchableOpacity
-                style={{ flex: 1, backgroundColor: theme.colors.neutral[100], borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginRight: 4, opacity: isDeleting ? 0.5 : 1 }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.neutral[100],
+                  borderRadius: 12,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  marginRight: 4,
+                  opacity: isDeleting ? 0.5 : 1,
+                  borderWidth: 2,
+                  borderColor: theme.colors.neutral[300], // Add border for better visibility
+                }}
                 onPress={() => setShowDeleteModal(false)}
                 accessibilityLabel="Cancel delete account"
                 disabled={isDeleting}
               >
-                <Text style={{ color: theme.colors.neutral[600], fontWeight: '600', fontSize: 16 }}>Cancel</Text>
+                <Text style={{ color: theme.colors.neutral[700], fontWeight: '600', fontSize: 16 }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ flex: 1, backgroundColor: theme.colors.error[600], borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginLeft: 4, shadowColor: theme.colors.error[600], shadowOpacity: 0.18, shadowRadius: 8, elevation: 2, flexDirection: 'row', justifyContent: 'center', opacity: isDeleting ? 0.7 : 1 }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.error[600],
+                  borderRadius: 12,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  marginLeft: 4,
+                  shadowColor: theme.colors.error[600],
+                  shadowOpacity: 0.18,
+                  shadowRadius: 8,
+                  elevation: 2,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  opacity: isDeleting ? 0.7 : 1,
+                }}
                 onPress={confirmDeleteAccount}
                 accessibilityLabel="Delete account permanently"
                 disabled={isDeleting}
