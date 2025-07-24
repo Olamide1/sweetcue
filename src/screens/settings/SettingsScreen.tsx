@@ -5,7 +5,7 @@ import { Button, Card } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import { accountService } from '../../services/account';
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings';
+export type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
 
 interface SettingsScreenProps {
   onNavigate?: (screen: Screen) => void;
@@ -141,28 +141,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate }) => {
       title: 'Notifications',
       subtitle: 'Manage your reminder preferences',
       emoji: '🔔',
-      action: () => console.log('Navigate to notifications settings'),
+      action: () => onNavigate?.('notifications'),
     },
     {
       id: 2,
       title: 'Privacy & Security',
       subtitle: 'Control your data and privacy',
       emoji: '🔒',
-      action: () => console.log('Navigate to privacy settings'),
+      action: () => onNavigate?.('privacySecurity'),
     },
     {
       id: 3,
-      title: 'Backup & Sync',
-      subtitle: 'Manage your data backup',
-      emoji: '☁️',
-      action: () => console.log('Navigate to backup settings'),
-    },
-    {
-      id: 4,
       title: 'Help & Support',
       subtitle: 'Get help and contact support',
       emoji: '❓',
-      action: () => console.log('Navigate to help'),
+      action: () => onNavigate?.('helpSupport'),
+    },
+    {
+      id: 4,
+      title: 'Recent Activity',
+      subtitle: 'View your completed and missed gestures',
+      emoji: '📊',
+      action: () => onNavigate?.('recentActivity'),
     },
     {
       id: 5,

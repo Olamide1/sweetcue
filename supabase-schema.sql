@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   email TEXT NOT NULL,
+  push_token TEXT,
+  notification_preferences JSONB DEFAULT '{"pushEnabled": true, "emailEnabled": true, "reminderAdvance": 1}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id)
@@ -73,6 +75,32 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   UNIQUE(user_id)
 );
 
+-- Create login history table for privacy & security
+CREATE TABLE IF NOT EXISTS public.login_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  device_info TEXT, -- "iPhone 15, iOS 17.0"
+  success BOOLEAN DEFAULT TRUE,
+  ip_address TEXT, -- Optional, if you want to track
+  user_agent TEXT, -- Browser/app info
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create support requests table for help & support
+CREATE TABLE IF NOT EXISTS public.support_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'in_progress', 'resolved', 'closed')) DEFAULT 'pending',
+  admin_response TEXT,
+  resolved_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_partners_user_id ON public.partners(user_id);
@@ -82,6 +110,11 @@ CREATE INDEX IF NOT EXISTS idx_reminders_user_id ON public.reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_partner_id ON public.reminders(partner_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_scheduled_date ON public.reminders(scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON public.login_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_history_login_time ON public.login_history(login_time);
+CREATE INDEX IF NOT EXISTS idx_support_requests_user_id ON public.support_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_requests_status ON public.support_requests(status);
+CREATE INDEX IF NOT EXISTS idx_support_requests_created_at ON public.support_requests(created_at);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -89,6 +122,8 @@ ALTER TABLE public.partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gestures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.support_requests ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 
@@ -141,14 +176,31 @@ CREATE POLICY "Users can update own reminders" ON public.reminders
 CREATE POLICY "Users can delete own reminders" ON public.reminders
   FOR DELETE USING (auth.uid() = user_id);
 
--- Subscriptions: Users can only see and modify their own subscription
-CREATE POLICY "Users can view own subscription" ON public.subscriptions
+-- Subscriptions: Users can only see and modify their own subscriptions
+CREATE POLICY "Users can view own subscriptions" ON public.subscriptions
   FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert own subscription" ON public.subscriptions
+CREATE POLICY "Users can insert own subscriptions" ON public.subscriptions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own subscription" ON public.subscriptions
+CREATE POLICY "Users can update own subscriptions" ON public.subscriptions
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Login History: Users can only see their own login history
+CREATE POLICY "Users can view own login history" ON public.login_history
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own login history" ON public.login_history
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Support Requests: Users can only see and modify their own support requests
+CREATE POLICY "Users can view own support requests" ON public.support_requests
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own support requests" ON public.support_requests
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own support requests" ON public.support_requests
   FOR UPDATE USING (auth.uid() = user_id);
 
 -- Functions for automatic timestamps
@@ -179,6 +231,10 @@ CREATE TRIGGER update_reminders_updated_at
 
 CREATE TRIGGER update_subscriptions_updated_at
   BEFORE UPDATE ON public.subscriptions
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER update_support_requests_updated_at
+  BEFORE UPDATE ON public.support_requests
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- Function to automatically create a profile when a user signs up

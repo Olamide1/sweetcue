@@ -290,7 +290,12 @@ class ReminderService {
         reminders.forEach(reminder => {
           const scheduledDate = new Date(reminder.scheduled_date);
           const today = new Date();
-          const timeDiff = scheduledDate.getTime() - today.getTime();
+          
+          // Reset both dates to start of day for accurate day calculation
+          const scheduledStartOfDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+          const todayStartOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          
+          const timeDiff = scheduledStartOfDay.getTime() - todayStartOfDay.getTime();
           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
           summaries.push({
@@ -326,7 +331,11 @@ class ReminderService {
             birthdayThisYear.setFullYear(currentYear + 1);
           }
           
-          const timeDiff = birthdayThisYear.getTime() - today.getTime();
+          // Reset both dates to start of day for accurate day calculation
+          const birthdayStartOfDay = new Date(birthdayThisYear.getFullYear(), birthdayThisYear.getMonth(), birthdayThisYear.getDate());
+          const todayStartOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          
+          const timeDiff = birthdayStartOfDay.getTime() - todayStartOfDay.getTime();
           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
           
           console.log('[ReminderService] Birthday calculation:', {
@@ -359,7 +368,11 @@ class ReminderService {
             anniversaryThisYear.setFullYear(currentYear + 1);
           }
           
-          const timeDiff = anniversaryThisYear.getTime() - today.getTime();
+          // Reset both dates to start of day for accurate day calculation
+          const anniversaryStartOfDay = new Date(anniversaryThisYear.getFullYear(), anniversaryThisYear.getMonth(), anniversaryThisYear.getDate());
+          const todayStartOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          
+          const timeDiff = anniversaryStartOfDay.getTime() - todayStartOfDay.getTime();
           const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));
           
           console.log('[ReminderService] Anniversary calculation:', {

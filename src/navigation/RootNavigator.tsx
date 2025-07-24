@@ -6,6 +6,10 @@ import EditPartnerScreen from '../screens/profile/EditPartnerScreen';
 import SubscriptionScreen from '../screens/subscription/SubscriptionScreen';
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
+import PrivacySecurityScreen from '../screens/settings/PrivacySecurityScreen';
+import NotificationsScreen from '../screens/settings/NotificationsScreen';
+import HelpSupportScreen from '../screens/settings/HelpSupportScreen';
+import RecentActivityScreen from '../screens/activity/RecentActivityScreen';
 import { subscriptionService } from '../services/subscriptions';
 import supabase from '../lib/supabase';
 
@@ -13,7 +17,7 @@ interface RootNavigatorProps {
   isAuthenticated?: boolean;
 }
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings';
+type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
 
 interface UserData {
   email: string;
@@ -262,6 +266,26 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
             onNavigate={handleNavigate}
           />
         );
+      case 'privacySecurity':
+        return (
+          <PrivacySecurityScreen
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'notifications':
+        return (
+          <NotificationsScreen
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'helpSupport':
+        return (
+          <HelpSupportScreen
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'recentActivity':
+        return <RecentActivityScreen onNavigate={handleNavigate} />;
       case 'dashboard':
         // This case handles when we explicitly navigate back to dashboard
         if (isAuthenticated && hasActiveSubscription && !isTrialExpired()) {

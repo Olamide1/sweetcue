@@ -1,6 +1,10 @@
 export { authService } from './auth';
+export { accountService } from './account';
 export { partnerService } from './partners';
 export { reminderService } from './reminders';
 export { gestureService } from './gestures';
-export { accountService } from './account';
-export { subscriptionService } from './subscriptions'; 
+export { subscriptionService } from './subscriptions';
+export { privacyService } from './privacy';
+export { emailService } from './email';
+export { notificationService } from './notifications';
+export { notificationScheduler } from './notificationScheduler'; 

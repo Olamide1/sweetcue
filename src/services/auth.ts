@@ -55,10 +55,26 @@ class AuthService {
 
       if (error) {
         console.error('Sign in error:', error.message);
+        // Track failed login attempt
+        try {
+          const { privacyService } = await import('./privacy');
+          await privacyService.trackLogin(false);
+        } catch (trackError) {
+          console.error('Error tracking failed login:', trackError);
+        }
         return { user: null, error };
       }
 
       console.log('Sign in successful:', data.user?.email);
+      
+      // Track successful login
+      try {
+        const { privacyService } = await import('./privacy');
+        await privacyService.trackLogin(true);
+      } catch (trackError) {
+        console.error('Error tracking successful login:', trackError);
+      }
+      
       return { user: data.user, error: null };
     } catch (error) {
       console.error('Sign in error:', error);

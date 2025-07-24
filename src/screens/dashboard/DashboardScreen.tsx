@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal, Keyboard, TouchableWithoutFeedback, SafeAreaView as RNSafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, TextInput, Modal, Keyboard, TouchableWithoutFeedback, SafeAreaView as RNSafeAreaView, Alert, ToastAndroid, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import EmptyState from '../../design-system/components/EmptyState';
@@ -8,8 +8,9 @@ import { partnerService } from '../../services/partners';
 import { reminderService } from '../../services/reminders';
 import { gestureService } from '../../services/gestures';
 import DatePicker from '../../components/DatePicker';
+import { MaterialIcons } from '@expo/vector-icons';
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings';
+type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'recentActivity';
 
 interface DashboardScreenProps {
   partnerName?: string;
@@ -143,6 +144,16 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [messageSaving, setMessageSaving] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
   const loveLanguage = partnerProfile?.love_language || '';
+
+  // Helper to show toast/snackbar
+  const showToast = (message: string) => {
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+    } else {
+      // For iOS, you can use a custom Toast component or Alert as fallback
+      Alert.alert('', message);
+    }
+  };
 
   // Fetch partner profile and reminders on mount
   useEffect(() => {
@@ -741,27 +752,63 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               />
             ) : (
               <View style={styles.remindersContainer}>
-                {next3DaysReminders.map((reminder: any) => (
-                  <Card key={reminder.id} style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
-                    <View style={styles.reminderContent}>
-                      <View style={styles.reminderLeft}>
-                        <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                        <View style={styles.reminderInfo}>
-                          <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                          <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
-                            {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
-                          </Text>
+                {next3DaysReminders.map((reminder: any, idx: number) => (
+                  <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
+                    <Card style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
+                      <View style={styles.reminderContent}>
+                        <View style={styles.reminderLeft}>
+                          <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
+                          <View style={styles.reminderInfo}>
+                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                            <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
+                              {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.reminderRight}>
+                          <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
+                            <Text style={styles.urgentDaysUntilText}>
+                              {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
+                            </Text>
+                          </View>
+                          {/* Modern Icon Button */}
+                          {reminder.type === 'reminder' && (
+                            <TouchableOpacity
+                              style={styles.completeIconButton}
+                              activeOpacity={0.7}
+                              onPress={async () => {
+                                // Animate out (optional: fade/slide)
+                                next3DaysReminders[idx]._animating = true;
+                                setReminders([...reminders]);
+                                try {
+                                  const { error } = await reminderService.completeReminder(reminder.id);
+                                  if (error) {
+                                    showToast(error);
+                                  } else {
+                                    showToast('Marked as completed!');
+                                    // Remove from list after short delay
+                                    setTimeout(async () => {
+                                      setRemindersLoading(true);
+                                      const { name, birthday, anniversary } = partnerProfile;
+                                      const partnerData = { name, birthday, anniversary };
+                                      const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                      setReminders(remindersSummary);
+                                      setRemindersLoading(false);
+                                    }, 400);
+                                  }
+                                } catch (err: any) {
+                                  showToast(err.message || 'Failed to complete reminder');
+                                }
+                              }}
+                              accessibilityLabel="Mark as Completed"
+                            >
+                              <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
-                      <View style={styles.reminderRight}>
-                        <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
-                          <Text style={styles.urgentDaysUntilText}>
-                            {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </Animated.View>
                 ))}
               </View>
             )}
@@ -826,21 +873,55 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               />
             ) : (
               <View style={styles.remindersContainer}>
-                {futureReminders.slice(0, 3).map((reminder: any) => (
-                  <Card key={reminder.id} style={styles.reminderCard}>
-                    <View style={styles.reminderContent}>
-                      <View style={styles.reminderLeft}>
-                        <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                        <View style={styles.reminderInfo}>
-                          <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                          <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
+                {futureReminders.slice(0, 3).map((reminder: any, idx: number) => (
+                  <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
+                    <Card style={styles.reminderCard}>
+                      <View style={styles.reminderContent}>
+                        <View style={styles.reminderLeft}>
+                          <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
+                          <View style={styles.reminderInfo}>
+                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                            <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.reminderRight}>
+                          <Text style={styles.daysUntil}>{reminder.daysUntil}d</Text>
+                          {/* Modern Icon Button */}
+                          {reminder.type === 'reminder' && (
+                            <TouchableOpacity
+                              style={styles.completeIconButton}
+                              activeOpacity={0.7}
+                              onPress={async () => {
+                                futureReminders[idx]._animating = true;
+                                setReminders([...reminders]);
+                                try {
+                                  const { error } = await reminderService.completeReminder(reminder.id);
+                                  if (error) {
+                                    showToast(error);
+                                  } else {
+                                    showToast('Marked as completed!');
+                                    setTimeout(async () => {
+                                      setRemindersLoading(true);
+                                      const { name, birthday, anniversary } = partnerProfile;
+                                      const partnerData = { name, birthday, anniversary };
+                                      const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                      setReminders(remindersSummary);
+                                      setRemindersLoading(false);
+                                    }, 400);
+                                  }
+                                } catch (err: any) {
+                                  showToast(err.message || 'Failed to complete reminder');
+                                }
+                              }}
+                              accessibilityLabel="Mark as Completed"
+                            >
+                              <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
-                      <View style={styles.reminderRight}>
-                        <Text style={styles.daysUntil}>{reminder.daysUntil}d</Text>
-                      </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </Animated.View>
                 ))}
               </View>
             )}
@@ -1288,8 +1369,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 onPress={() => {
                   console.log('Recent Activity menu item pressed');
                   setShowProfileMenu(false);
-                  // TODO: Navigate to recent activity when implemented
-                  console.log('Navigate to recent activity');
+                  onNavigate?.('recentActivity');
                 }}
               >
                 <Text style={styles.menuItemEmoji}>📊</Text>
@@ -1685,6 +1765,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 999,
   },
+  completeIconButton: {
+    marginTop: 8,
+    marginLeft: 8,
+    backgroundColor: theme.colors.success[50] || '#ECFDF5',
+    borderRadius: 20,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+},
 });
 
 export default DashboardScreen; 
