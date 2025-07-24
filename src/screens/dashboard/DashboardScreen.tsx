@@ -10,6 +10,7 @@ import { gestureService } from '../../services/gestures';
 import DatePicker from '../../components/DatePicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format, isThisWeek, parseISO } from 'date-fns';
+import { subscriptionService } from '../../services/subscriptions';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'recentActivity';
 
@@ -621,6 +622,51 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     },
   });
 
+  // After Quick Actions section, show subscription/billing summary card
+  {subscriptionStatus && subscriptionStatus.status === 'active' && (
+    <Card style={{ marginTop: 16, marginBottom: 24, backgroundColor: 'rgba(236, 233, 255, 0.7)', borderLeftWidth: 4, borderLeftColor: theme.colors.primary[400], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 }}>
+      <View>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: theme.colors.primary[700], marginBottom: 2 }}>
+          {subscriptionStatus.planType === 'weekly'
+            ? 'Weekly Plan Active'
+            : subscriptionStatus.planType === 'monthly'
+            ? 'Monthly Plan Active'
+            : subscriptionStatus.planType === 'yearly'
+            ? 'Yearly Plan Active'
+            : 'Paid Plan Active'}
+        </Text>
+        <Text style={{ color: theme.colors.neutral[700], fontSize: 14 }}>
+          You have full access to all features
+        </Text>
+        {subscriptionStatus.next_billing_date && (
+          <Text style={{ color: theme.colors.neutral[500], fontSize: 13, marginTop: 2 }}>
+            Next billing: {new Date(subscriptionStatus.next_billing_date).toLocaleDateString()}
+          </Text>
+        )}
+      </View>
+      <TouchableOpacity
+        style={{ backgroundColor: theme.colors.neutral[200], borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, marginLeft: 12 }}
+        onPress={() => onNavigate?.('subscription')}
+        accessibilityLabel="Manage Subscription"
+        accessibilityRole="button"
+      >
+        <Text style={{ color: theme.colors.primary[700], fontWeight: '600', fontSize: 15 }}>Manage</Text>
+      </TouchableOpacity>
+    </Card>
+  )}
+
+  // Add useEffect to refetch subscriptionStatus when returning from SubscriptionScreen
+  useEffect(() => {
+    // Refetch subscription status when dashboard regains focus or after subscription change
+    if (typeof onNavigate === 'function' && subscriptionStatus) {
+      subscriptionService.getSubscriptionStatus().then((status) => {
+        if (status) {
+          // Optionally update local state if needed
+        }
+      });
+    }
+  }, [subscriptionStatus]);
+
   return (
     <View style={styles.container}>
       {/* Modern Gradient Background */}
@@ -708,7 +754,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     style={styles.menuItem}
                     onPress={() => {
                       setShowProfileMenu(false);
-                      onNavigate?.('subscription');
+                      onNavigate && onNavigate('subscription');
                     }}
                   >
                     <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
@@ -1182,7 +1228,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
                 <TouchableOpacity 
                   style={styles.manageButton}
-                  onPress={() => onNavigate?.('subscription')}
+                  onPress={() => onNavigate && onNavigate('subscription')}
                 >
                   <Text style={styles.manageButtonText}>Manage</Text>
                 </TouchableOpacity>

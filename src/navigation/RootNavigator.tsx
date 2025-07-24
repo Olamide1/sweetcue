@@ -153,16 +153,10 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         subscriptionPlan: status.planType,
       }));
       setSubscriptionStatus(status);
-      if (status.planType === 'trial' && status.trialDaysLeft > 0 && status.hasSubscription) {
-        // Set trial end date from backend
-        const now = new Date();
-        const end = new Date();
-        end.setDate(now.getDate() + status.trialDaysLeft);
-        setTrialEndDate(end);
-      } else {
-        setTrialEndDate(undefined);
+      if (currentScreen === 'subscription') {
+        // Stay on subscription page if that's where the user navigated
+        return;
       }
-      // Navigation logic
       if (status.isActive && !status.isTrialExpired) {
         setCurrentScreen('dashboard');
       } else {
