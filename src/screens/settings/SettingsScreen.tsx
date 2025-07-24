@@ -4,14 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import { accountService } from '../../services/account';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
 
 interface SettingsScreenProps {
   onNavigate?: (screen: Screen) => void;
+  subscriptionStatus?: any;
 }
 
-const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate }) => {
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate, subscriptionStatus }) => {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionSummary, setDeletionSummary] = useState({
@@ -339,79 +341,49 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate }) => {
       {/* Delete Account Confirmation Modal */}
       <Modal
         visible={showDeleteModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => !isDeleting && setShowDeleteModal(false)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!isDeleting) setShowDeleteModal(false); }}
       >
-        <View style={styles.modalContainer}>
-          <LinearGradient
-            colors={['#FFF0F5', '#FFFFFF', '#F8F0FF']}
-            style={styles.modalGradient}
-          />
-          <SafeAreaView style={styles.modalSafeArea}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity 
-                onPress={() => !isDeleting && setShowDeleteModal(false)}
-                style={styles.modalCloseButton}
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 32, width: 340, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 }}>
+            <TouchableOpacity style={{ position: 'absolute', top: 16, right: 16, zIndex: 2 }} onPress={() => { if (!isDeleting) setShowDeleteModal(false); }} accessibilityLabel="Close delete account modal" disabled={isDeleting}>
+              <MaterialIcons name="close" size={28} color={theme.colors.neutral[400]} />
+            </TouchableOpacity>
+            <MaterialIcons name="warning" size={56} color={theme.colors.warning[600]} style={{ marginBottom: 16, marginTop: 8 }} />
+            <Text style={{ fontWeight: 'bold', fontSize: 22, color: theme.colors.error[600], marginBottom: 12, textAlign: 'center' }}>This action cannot be undone</Text>
+            <Text style={{ fontSize: 16, color: theme.colors.neutral[700], marginBottom: 18, textAlign: 'center' }}>
+              Deleting your account will permanently remove all your data including:
+            </Text>
+            <View style={{ alignSelf: 'stretch', marginBottom: 18 }}>
+              <Text style={{ fontSize: 16, color: theme.colors.neutral[900], marginBottom: 2 }}>• {deletionSummary.reminders} reminders</Text>
+              <Text style={{ fontSize: 16, color: theme.colors.neutral[900], marginBottom: 2 }}>• {deletionSummary.gestures} custom gestures</Text>
+              <Text style={{ fontSize: 16, color: theme.colors.neutral[900], marginBottom: 2 }}>• {deletionSummary.partners} partner profile{deletionSummary.partners !== 1 ? 's' : ''}</Text>
+              <Text style={{ fontSize: 16, color: theme.colors.neutral[900] }}>• All account settings and preferences</Text>
+            </View>
+            <Text style={{ fontWeight: 'bold', color: theme.colors.error[600], fontSize: 16, marginBottom: 28, textAlign: 'center' }}>
+              Once deleted, this data cannot be recovered. Are you absolutely sure?
+            </Text>
+            <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: theme.colors.neutral[100], borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginRight: 4, opacity: isDeleting ? 0.5 : 1 }}
+                onPress={() => setShowDeleteModal(false)}
+                accessibilityLabel="Cancel delete account"
                 disabled={isDeleting}
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Text style={{ color: theme.colors.neutral[600], fontWeight: '600', fontSize: 16 }}>Cancel</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Delete Account</Text>
-              <View style={styles.modalPlaceholder} />
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: theme.colors.error[600], borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginLeft: 4, shadowColor: theme.colors.error[600], shadowOpacity: 0.18, shadowRadius: 8, elevation: 2, flexDirection: 'row', justifyContent: 'center', opacity: isDeleting ? 0.7 : 1 }}
+                onPress={confirmDeleteAccount}
+                accessibilityLabel="Delete account permanently"
+                disabled={isDeleting}
+              >
+                {isDeleting && <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />}
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>{isDeleting ? 'Deleting...' : 'Delete Account'}</Text>
+              </TouchableOpacity>
             </View>
-            
-            <View style={styles.modalContent}>
-              <Card style={styles.deleteCard}>
-                <View style={styles.deleteContent}>
-                  <Text style={styles.deleteEmoji}>⚠️</Text>
-                  <Text style={styles.deleteTitle}>This action cannot be undone</Text>
-                  <Text style={styles.deleteDescription}>
-                    Deleting your account will permanently remove all your data including:
-                  </Text>
-                  
-                  <View style={styles.deleteList}>
-                    <View style={styles.deleteItem}>
-                      <Text style={styles.deleteItemText}>• {deletionSummary.reminders} reminders</Text>
-                    </View>
-                    <View style={styles.deleteItem}>
-                      <Text style={styles.deleteItemText}>• {deletionSummary.gestures} custom gestures</Text>
-                    </View>
-                    <View style={styles.deleteItem}>
-                      <Text style={styles.deleteItemText}>• {deletionSummary.partners} partner profile{deletionSummary.partners !== 1 ? 's' : ''}</Text>
-                    </View>
-                    <View style={styles.deleteItem}>
-                      <Text style={styles.deleteItemText}>• All account settings and preferences</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.deleteWarning}>
-                    Once deleted, this data cannot be recovered. Are you absolutely sure?
-                  </Text>
-
-                  <View style={styles.deleteActions}>
-                    <Button
-                      title="Cancel"
-                      variant="ghost"
-                      size="lg"
-                      onPress={() => setShowDeleteModal(false)}
-                      style={styles.deleteCancelButton}
-                      disabled={isDeleting}
-                    />
-                    <Button
-                      title={isDeleting ? "Deleting..." : "Delete Account"}
-                      variant="primary"
-                      size="lg"
-                      onPress={confirmDeleteAccount}
-                      style={styles.deleteConfirmButton}
-                      disabled={isDeleting}
-                      loading={isDeleting}
-                    />
-                  </View>
-                </View>
-              </Card>
-            </View>
-          </SafeAreaView>
+          </View>
         </View>
       </Modal>
     </View>

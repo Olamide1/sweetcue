@@ -22,7 +22,7 @@ type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashb
 interface UserData {
   email: string;
   partnerName: string;
-  subscriptionPlan: 'trial' | 'monthly' | 'yearly' | null;
+  subscriptionPlan: 'trial' | 'weekly' | 'monthly' | 'yearly' | null;
   trialEndDate?: Date;
   partnerProfile?: {
     name: string;
@@ -50,7 +50,11 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       dislikes: '',
     },
   });
+  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const [trialEndDate, setTrialEndDate] = useState<Date | undefined>(undefined);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [signUpLoading, setSignUpLoading] = useState(false);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
 
   // Restore session on mount and listen for auth state changes
   useEffect(() => {
@@ -58,6 +62,25 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     const restoreSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session && isMounted) {
+        // Try to fetch the user's profile row
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single();
+        if (error && error.code === 'PGRST116') {
+          // No profile row found (account deleted)
+          alert('No account found with that information. Please sign up.');
+          setIsAuthenticated(false);
+          setCurrentScreen('welcome');
+          return;
+        }
+        if (error) {
+          alert('An unexpected error occurred. Please try again.');
+          setIsAuthenticated(false);
+          setCurrentScreen('welcome');
+          return;
+        }
         setIsAuthenticated(true);
         setUserData(prev => ({
           ...prev,
@@ -70,11 +93,31 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       if (session) {
-        setIsAuthenticated(true);
-        setUserData(prev => ({
-          ...prev,
-          email: session.user.email || '',
-        }));
+        // Try to fetch the user's profile row
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data: profile, error }) => {
+            if (error && error.code === 'PGRST116') {
+              alert('No account found with that information. Please sign up.');
+              setIsAuthenticated(false);
+              setCurrentScreen('welcome');
+              return;
+            }
+            if (error) {
+              alert('An unexpected error occurred. Please try again.');
+              setIsAuthenticated(false);
+              setCurrentScreen('welcome');
+              return;
+            }
+            setIsAuthenticated(true);
+            setUserData(prev => ({
+              ...prev,
+              email: session.user.email || '',
+            }));
+          });
       } else {
         setIsAuthenticated(false);
         setUserData({
@@ -106,6 +149,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         ...prev,
         subscriptionPlan: status.planType,
       }));
+      setSubscriptionStatus(status);
       if (status.planType === 'trial' && status.trialDaysLeft > 0 && status.hasSubscription) {
         // Set trial end date from backend
         const now = new Date();
@@ -130,14 +174,48 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     setCurrentScreen(screen);
   };
 
-  const handleAuthentication = async (partnerName?: string, email?: string) => {
-    setIsAuthenticated(true);
-    setUserData(prev => ({
-      ...prev,
-      partnerName: partnerName || prev.partnerName,
-      email: email || prev.email,
-    }));
-    // Subscription status and navigation will be handled by useEffect
+  const handleAuthentication = async (partnerName?: string, email?: string, password?: string) => {
+    setSignUpLoading(true);
+    setSignUpError(null);
+    try {
+      // 1. Always trigger sign-up API call
+      const { data, error } = await supabase.auth.signUp({
+        email: email!,
+        password: password!,
+      });
+      if (error) {
+        setSignUpError(error.message || 'Sign up failed. Please try again.');
+        setSignUpLoading(false);
+        return;
+      }
+      // 2. Wait for a valid session after successful sign-up
+      let user = null;
+      let tries = 0;
+      while (!user && tries < 10) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          user = currentUser;
+          break;
+        }
+        await new Promise(res => setTimeout(res, 300));
+        tries++;
+      }
+      setSignUpLoading(false);
+      if (!user) {
+        setSignUpError('Authentication not ready. Please try again.');
+        return;
+      }
+      setIsAuthenticated(true);
+      setUserData(prev => ({
+        ...prev,
+        partnerName: partnerName || prev.partnerName,
+        email: email || prev.email,
+      }));
+      // Subscription status and navigation will be handled by useEffect
+    } catch (err: any) {
+      setSignUpError(err.message || 'Sign up failed. Please try again.');
+      setSignUpLoading(false);
+    }
   };
 
   const handleOnboardingComplete = (partnerName: string, email: string) => {
@@ -156,13 +234,26 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     // Navigation will be handled by useEffect
   };
 
-  const handleSubscriptionComplete = (plan: 'trial' | 'monthly' | 'yearly') => {
+  const handleSubscriptionComplete = (plan: 'trial' | 'weekly' | 'monthly' | 'yearly') => {
     setUserData(prev => ({
       ...prev,
       subscriptionPlan: plan,
     }));
     setHasActiveSubscription(true);
-    setCurrentScreen('dashboard');
+    // Re-fetch subscription status to ensure all screens are up to date
+    subscriptionService.getSubscriptionStatus().then(status => {
+      setSubscriptionStatus(status);
+      setUserData(prev => ({ ...prev, subscriptionPlan: status.planType }));
+      if (status.planType === 'trial' && status.trialDaysLeft > 0 && status.hasSubscription) {
+        const now = new Date();
+        const end = new Date();
+        end.setDate(now.getDate() + status.trialDaysLeft);
+        setTrialEndDate(end);
+      } else {
+        setTrialEndDate(undefined);
+      }
+      setCurrentScreen('dashboard');
+    });
   };
 
   const calculateTrialDaysLeft = (): number => {
@@ -218,10 +309,16 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         partnerName={userData.partnerName}
         subscriptionPlan={userData.subscriptionPlan}
         trialDaysLeft={userData.subscriptionPlan === 'trial' ? calculateTrialDaysLeft() : undefined}
+        subscriptionStatus={subscriptionStatus}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
       />
     );
+  }
+
+  // Show a loading spinner if waiting for authentication
+  if (authLoading) {
+    return <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><span>Loading...</span></div>;
   }
 
   // Otherwise show appropriate flow
@@ -250,6 +347,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
             onSubscriptionComplete={handleSubscriptionComplete}
             userEmail={userData.email}
             partnerName={userData.partnerName}
+            subscriptionStatus={subscriptionStatus}
           />
         );
       case 'editPartner':
@@ -264,6 +362,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         return (
           <SettingsScreen
             onNavigate={handleNavigate}
+            subscriptionStatus={subscriptionStatus}
           />
         );
       case 'privacySecurity':
@@ -294,6 +393,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
               partnerName={userData.partnerName}
               subscriptionPlan={userData.subscriptionPlan}
               trialDaysLeft={userData.subscriptionPlan === 'trial' ? calculateTrialDaysLeft() : undefined}
+              subscriptionStatus={subscriptionStatus}
               onNavigate={handleNavigate}
               onLogout={handleLogout}
             />

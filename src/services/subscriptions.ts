@@ -1,11 +1,10 @@
 import supabase from '../lib/supabase';
-import type { Database } from '../lib/supabase';
+// TODO: Replace 'any' with the correct Supabase Database type when available
+type Subscription = any;
+type SubscriptionInsert = any;
+type SubscriptionUpdate = any;
 
-type Subscription = Database['public']['Tables']['subscriptions']['Row'];
-type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert'];
-type SubscriptionUpdate = Database['public']['Tables']['subscriptions']['Update'];
-
-export type PlanType = 'trial' | 'monthly' | 'yearly';
+export type PlanType = 'trial' | 'weekly' | 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'cancelled' | 'expired';
 
 export interface SubscriptionData {
@@ -230,23 +229,39 @@ class SubscriptionService {
   /**
    * Upgrade to paid plan (placeholder for Stripe integration)
    */
-  async upgradeToPaidPlan(planType: 'monthly' | 'yearly', stripeCustomerId?: string, stripeSubscriptionId?: string): Promise<SubscriptionResponse> {
+  async upgradeToPaidPlan(planType: 'weekly' | 'monthly' | 'yearly', stripeCustomerId?: string, stripeSubscriptionId?: string): Promise<SubscriptionResponse> {
     try {
       const nextBillingDate = new Date();
-      if (planType === 'monthly') {
+      if (planType === 'weekly') {
+        nextBillingDate.setDate(nextBillingDate.getDate() + 7);
+      } else if (planType === 'monthly') {
         nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
       } else {
         nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
       }
-
-      return this.updateSubscription({
-        plan_type: planType,
-        status: 'active',
-        trial_end_date: null,
-        next_billing_date: nextBillingDate.toISOString(),
-        stripe_customer_id: stripeCustomerId,
-        stripe_subscription_id: stripeSubscriptionId,
-      });
+      // Check if subscription row exists
+      const { data: existing } = await this.getSubscription();
+      if (existing) {
+        // Update existing row
+        return this.updateSubscription({
+          plan_type: planType,
+          status: 'active',
+          trial_end_date: null,
+          next_billing_date: nextBillingDate.toISOString(),
+          stripe_customer_id: stripeCustomerId,
+          stripe_subscription_id: stripeSubscriptionId,
+        });
+      } else {
+        // Create new row
+        return this.createSubscription({
+          plan_type: planType,
+          status: 'active',
+          trial_end_date: null,
+          next_billing_date: nextBillingDate.toISOString(),
+          stripe_customer_id: stripeCustomerId,
+          stripe_subscription_id: stripeSubscriptionId,
+        });
+      }
     } catch (error) {
       console.error('Upgrade to paid plan error:', error);
       return { data: null, error: 'An unexpected error occurred during upgrade' };

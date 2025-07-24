@@ -17,6 +17,7 @@ import { Button, Card } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import DatePicker from '../../components/DatePicker';
 import { partnerService } from '../../services/partners';
+import supabase from '../../lib/supabase';
 
 interface PartnerProfile {
   name: string;
@@ -143,6 +144,22 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
   });
 
   const handleNext = () => {
+    setError(null); // Clear error on step change
+    // Step-by-step required field validation
+    if (currentStep === 1 && !profile.name.trim()) {
+      Alert.alert('Required', 'Please enter your partner\'s name');
+      return;
+    }
+    if (currentStep === 3 && !profile.loveLanguage.trim()) {
+      Alert.alert('Required', 'Please select a love language');
+      return;
+    }
+    if (currentStep === 5) {
+      if (!profile.userEmail.trim() || !profile.userPassword.trim()) {
+        Alert.alert('Required', 'Please enter your email and password');
+        return;
+      }
+    }
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -151,6 +168,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
   };
 
   const handleBack = () => {
+    setError(null); // Clear error on step change
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     } else {
@@ -169,23 +187,55 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
     }
     setLoading(true);
     setError(null);
-    // Save to Supabase
-    const partnerPayload = {
-      name: profile.name,
-      birthday: profile.keyDates.birthday || undefined,
-      anniversary: profile.keyDates.anniversary || undefined,
-      loveLanguage: profile.loveLanguage,
-      dislikes: profile.dislikes,
-    };
-    const { data, error } = await partnerService.createPartner(partnerPayload);
-    setLoading(false);
-    if (error) {
-      setError(error);
-      Alert.alert('Error', error);
-      return;
+    try {
+      // 1. Create Supabase Auth user
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: profile.userEmail,
+        password: profile.userPassword,
+      });
+      if (signUpError) {
+        setError(signUpError.message || 'Sign up failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+      // 2. Wait for session
+      let user = null;
+      let tries = 0;
+      while (!user && tries < 10) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          user = currentUser;
+          break;
+        }
+        await new Promise(res => setTimeout(res, 300));
+        tries++;
+      }
+      if (!user) {
+        setError('Authentication not ready. Please try again.');
+        setLoading(false);
+        return;
+      }
+      // 3. Save partner profile (now authenticated)
+      const partnerPayload = {
+        name: profile.name,
+        birthday: profile.keyDates.birthday || undefined,
+        anniversary: profile.keyDates.anniversary || undefined,
+        loveLanguage: profile.loveLanguage,
+        dislikes: profile.dislikes,
+      };
+      const { data, error: partnerError } = await partnerService.createPartner(partnerPayload);
+      setLoading(false);
+      if (partnerError) {
+        setError(partnerError);
+        Alert.alert('Error', partnerError);
+        return;
+      }
+      // Navigate to subscription screen with partner name and email
+      onComplete?.(profile.name, profile.userEmail);
+    } catch (err: any) {
+      setError(err.message || 'Sign up failed. Please try again.');
+      setLoading(false);
     }
-    // Navigate to subscription screen with partner name and email
-    onComplete?.(profile.name, profile.userEmail);
   };
 
   const updateProfile = (updates: Partial<PartnerProfile>) => {
@@ -365,12 +415,18 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
             {/* Action Button */}
             <View style={styles.actionSection}>
               <Button
-                title={currentStep < totalSteps ? 'Continue' : 'Complete Setup'}
+                title={currentStep < totalSteps ? 'Continue' : loading ? 'Completing...' : 'Complete Setup'}
                 variant="primary"
                 size="lg"
                 onPress={handleNext}
                 style={styles.continueButton}
+                disabled={loading}
+                loading={loading}
               />
+              {/* Only show error on step 5 (account creation) */}
+              {currentStep === 5 && !!error && (
+                <Text style={{ color: theme.colors.error[600], marginTop: 12, textAlign: 'center' }}>{error}</Text>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>

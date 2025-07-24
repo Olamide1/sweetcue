@@ -14,10 +14,11 @@ type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashb
 
 interface DashboardScreenProps {
   partnerName?: string;
-  subscriptionPlan?: 'trial' | 'monthly' | 'yearly' | null;
+  subscriptionPlan?: 'trial' | 'weekly' | 'monthly' | 'yearly' | null;
   trialDaysLeft?: number;
   onNavigate?: (screen: Screen) => void;
   onLogout?: () => void;
+  subscriptionStatus?: any;
 }
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ 
@@ -25,7 +26,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   subscriptionPlan = 'trial',
   trialDaysLeft = 7,
   onNavigate,
-  onLogout
+  onLogout,
+  subscriptionStatus
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -144,6 +146,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [messageSaving, setMessageSaving] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
   const loveLanguage = partnerProfile?.love_language || '';
+  const [accountDeleted, setAccountDeleted] = useState(false);
 
   // Helper to show toast/snackbar
   const showToast = (message: string) => {
@@ -187,6 +190,15 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         setReminders(remindersSummary);
       } catch (err: any) {
         if (!isMounted) return;
+        if (
+          (err.message && err.message.includes('JSON object requested, multiple (or no) rows returned')) ||
+          (err.code && err.code === 'PGRST116')
+        ) {
+          setAccountDeleted(true);
+          alert('No account found with that information. Please sign up.');
+          if (typeof onNavigate === 'function') onNavigate('welcome');
+          return;
+        }
         console.error('[DashboardScreen] Error in fetchData:', err);
         setRemindersError(err.message || 'Failed to load reminders.');
       } finally {
@@ -197,7 +209,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return () => { isMounted = false; };
   }, []);
 
-
+  if (accountDeleted) return null;
 
   // Split reminders into next 3 days and future reminders
   const next3DaysReminders = reminders.filter(r => r.daysUntil <= 3);
@@ -873,7 +885,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               />
             ) : (
               <View style={styles.remindersContainer}>
-                {futureReminders.slice(0, 3).map((reminder: any, idx: number) => (
+                {futureReminders.map((reminder: any, idx: number) => (
                   <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
                     <Card style={styles.reminderCard}>
                       <View style={styles.reminderContent}>
@@ -1039,11 +1051,16 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   <Text style={styles.subscriptionEmoji}>✨</Text>
                   <View style={styles.subscriptionInfo}>
                     <Text style={styles.subscriptionTitle}>
-                      {subscriptionPlan === 'monthly' ? 'Monthly' : 'Yearly'} Plan Active
+                      {subscriptionPlan === 'weekly' ? 'Weekly Plan Active' : subscriptionPlan === 'monthly' ? 'Monthly Plan Active' : subscriptionPlan === 'yearly' ? 'Yearly Plan Active' : 'Paid Plan Active'}
                     </Text>
                     <Text style={styles.subscriptionSubtext}>
                       You have full access to all features
                     </Text>
+                    {subscriptionStatus?.next_billing_date && (
+                      <Text style={styles.subscriptionSubtext}>
+                        Next billing: {new Date(subscriptionStatus.next_billing_date).toLocaleDateString()}
+                      </Text>
+                    )}
                   </View>
                 </View>
                 <TouchableOpacity 

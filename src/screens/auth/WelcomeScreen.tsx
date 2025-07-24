@@ -181,7 +181,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onNavigate }) => {
             </View>
             
             <Text style={responsiveStyles.pricingText}>
-              Start free • $8/month after trial
+              Start free, $3/week or $10/month after trial.
             </Text>
           </View>
         </View>

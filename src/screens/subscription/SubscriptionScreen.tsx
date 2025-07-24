@@ -1,22 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions, Animated, Alert, Modal, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, ScrollIndicator } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import { subscriptionService } from '../../services/subscriptions';
-import { Alert } from 'react-native';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription';
 
 interface SubscriptionScreenProps {
   onNavigate?: (screen: Screen) => void;
-  onSubscriptionComplete?: (plan: 'trial' | 'monthly' | 'yearly') => void;
+  onSubscriptionComplete?: (plan: 'trial' | 'weekly' | 'monthly' | 'yearly') => void;
   userEmail?: string;
   partnerName?: string;
+  subscriptionStatus?: any;
 }
 
 interface PricingPlan {
-  id: 'trial' | 'monthly' | 'yearly';
+  id: 'trial' | 'weekly' | 'monthly' | 'yearly';
   name: string;
   price: string;
   period: string;
@@ -31,15 +31,26 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   onNavigate, 
   onSubscriptionComplete,
   userEmail = "user@example.com",
-  partnerName = "Alex"
+  partnerName = "Alex",
+  subscriptionStatus: subscriptionStatusProp
 }) => {
-  const [selectedPlan, setSelectedPlan] = useState<'trial' | 'monthly' | 'yearly'>('trial');
+  const [selectedPlan, setSelectedPlan] = useState<'trial' | 'weekly' | 'monthly' | 'yearly'>('trial');
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [continueLoading, setContinueLoading] = useState(false);
+  const [continueError, setContinueError] = useState<string | null>(null);
+
+  // Use prop if provided, otherwise local state
+  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(subscriptionStatusProp);
 
   useEffect(() => {
+    if (subscriptionStatusProp) {
+      setSubscriptionStatus(subscriptionStatusProp);
+      setLoadingStatus(false);
+      return;
+    }
     const fetchStatus = async () => {
       setLoadingStatus(true);
       const status = await subscriptionService.getSubscriptionStatus();
@@ -47,7 +58,15 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
       setLoadingStatus(false);
     };
     fetchStatus();
-  }, []);
+  }, [subscriptionStatusProp]);
+
+  // Utility to check if user can create reminders (export for use in other screens)
+  const canCreateReminders = () => {
+    if (!subscriptionStatus) return false;
+    if (subscriptionStatus.status === 'active' && (subscriptionStatus.planType === 'weekly' || subscriptionStatus.planType === 'monthly' || subscriptionStatus.planType === 'yearly')) return true;
+    if (subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && !subscriptionStatus.isTrialExpired) return true;
+    return false;
+  };
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -155,9 +174,23 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
       popular: true
     },
     {
+      id: 'weekly',
+      name: 'Weekly Plan',
+      price: '$3',
+      period: 'per week',
+      features: [
+        'All premium features',
+        'Unlimited reminders',
+        'Advanced scheduling',
+        'Gift recommendations',
+        'Calendar integration'
+      ],
+      badge: 'Flexible',
+    },
+    {
       id: 'monthly',
       name: 'Monthly Plan',
-      price: '$8',
+      price: '$10',
       period: 'per month',
       features: [
         'All premium features',
@@ -172,8 +205,8 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
       name: 'Yearly Plan',
       price: '$72',
       period: 'per year',
-      originalPrice: '$96',
-      savings: 'Save $24',
+      originalPrice: '$120',
+      savings: 'Save $48',
       features: [
         'All premium features',
         'Priority support',
@@ -185,34 +218,46 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
     }
   ];
 
+  // Improved trial days left calculation
   const calculateTrialEndDate = () => {
     const today = new Date();
+    const days = Math.max(1, Math.floor(subscriptionStatus?.trialDaysLeft || 7));
     const trialEnd = new Date(today);
-    trialEnd.setDate(today.getDate() + 7);
+    trialEnd.setDate(today.getDate() + days);
     return trialEnd.toLocaleDateString('en-US', { 
       month: 'long', 
       day: 'numeric' 
     });
   };
 
-  const handlePlanSelect = (planId: 'trial' | 'monthly' | 'yearly') => {
+  const handlePlanSelect = (planId: 'trial' | 'weekly' | 'monthly' | 'yearly') => {
     setSelectedPlan(planId);
   };
 
-  const handleContinue = () => {
-    // TODO: Implement actual payment processing for paid plans
-    console.log('Selected plan:', selectedPlan);
-    console.log('User:', { email: userEmail, partnerName });
-    
-    if (selectedPlan === 'trial') {
-      console.log('Starting 7-day free trial, ends:', calculateTrialEndDate());
-    } else {
-      console.log('Processing payment for plan:', selectedPlan);
-      // Here would integrate with Stripe/payment processor
+  const handleContinue = async () => {
+    setContinueLoading(true);
+    setContinueError(null);
+    let result;
+    try {
+      if (selectedPlan === 'trial') {
+        result = await subscriptionService.startTrial();
+      } else {
+        result = await subscriptionService.upgradeToPaidPlan(selectedPlan);
+      }
+      if (result.error) {
+        setContinueError(result.error);
+        setContinueLoading(false);
+        return;
+      }
+      // Re-fetch subscription status
+      const status = await subscriptionService.getSubscriptionStatus();
+      setSubscriptionStatus(status);
+      setContinueLoading(false);
+      onSubscriptionComplete?.(selectedPlan);
+    } catch (err: any) {
+      setContinueError(err.message || 'An error occurred');
+      setContinueLoading(false);
     }
-    
-    // Complete subscription flow
-    onSubscriptionComplete?.(selectedPlan);
   };
 
   const handleScrollToBottom = () => {
@@ -225,6 +270,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   };
 
   const selectedPlanData = plans.find(p => p.id === selectedPlan);
+  const selectedPlanId = subscriptionStatus?.planType || selectedPlan;
 
   const handleBack = async () => {
     const status = await subscriptionService.getSubscriptionStatus();
@@ -239,13 +285,14 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   const onActiveTrial = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && !subscriptionStatus.isTrialExpired;
   const onExpiredTrial = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.planType === 'trial' && subscriptionStatus.isTrialExpired;
   const onActivePaid = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.status === 'active' && subscriptionStatus.planType !== 'trial' && !subscriptionStatus.isTrialExpired;
+  const onActiveWeekly = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.status === 'active' && subscriptionStatus.planType === 'weekly';
   const onCancelledOrExpiredPaid = subscriptionStatus && subscriptionStatus.hasSubscription && (subscriptionStatus.status === 'cancelled' || subscriptionStatus.status === 'expired');
   const noSubscription = !subscriptionStatus || !subscriptionStatus.hasSubscription;
 
   // Show trial option only if no subscription or trial expired
   const showTrialOption = noSubscription || onExpiredTrial;
   // Show paid plans if not on active paid plan
-  const showPaidPlans = noSubscription || onActiveTrial || onExpiredTrial || onCancelledOrExpiredPaid;
+  const showPaidPlans = noSubscription || onActiveTrial || onExpiredTrial || onCancelledOrExpiredPaid || onActiveWeekly;
   // Show manage if on active paid plan
   const showManage = onActivePaid;
 
@@ -258,6 +305,12 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
+      {/* Full-page loading spinner */}
+      {loadingStatus && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary[500]} />
+        </View>
+      )}
       
       <SafeAreaView style={styles.safeArea}>
         <ScrollView 
@@ -275,36 +328,35 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
           {loadingStatus ? (
             <Text style={{ textAlign: 'center', marginVertical: 16 }}>Loading subscription status...</Text>
           ) : subscriptionStatus && subscriptionStatus.hasSubscription ? (
-            <Card style={{ marginBottom: 16, backgroundColor: 'rgba(99,102,241,0.08)' }}>
-              <View style={{ padding: 16 }}>
-                <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
-                  {subscriptionStatus.planType === 'trial'
-                    ? `You are on a Free Trial`
-                    : `You are on the ${subscriptionStatus.planType} plan`}
-                </Text>
-                {subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && (
-                  <Text style={{ fontSize: 14 }}>
-                    {subscriptionStatus.trialDaysLeft} days left in trial
-                  </Text>
-                )}
-                {subscriptionStatus.planType !== 'trial' && subscriptionStatus.status === 'active' && subscriptionStatus.trialDaysLeft === 0 && (
-                  <Text style={{ fontSize: 14 }}>
-                    Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
-                  </Text>
-                )}
-                {subscriptionStatus.isTrialExpired && (
-                  <Text style={{ fontSize: 14, color: 'red' }}>Trial expired</Text>
-                )}
-              </View>
-            </Card>
+            <>
+              {subscriptionStatus && subscriptionStatus.planType !== 'trial' && (
+                <Card style={{ marginBottom: 16, backgroundColor: 'rgba(99,102,241,0.08)' }}>
+                  <View style={{ padding: 16 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+                      {subscriptionStatus.planType === 'weekly'
+                        ? 'You are on the weekly plan'
+                        : subscriptionStatus.planType === 'monthly'
+                        ? 'You are on the monthly plan'
+                        : 'You are on the yearly plan'}
+                    </Text>
+                    {subscriptionStatus.status === 'active' && subscriptionStatus.next_billing_date && (
+                      <Text style={{ fontSize: 14 }}>
+                        Next billing: {new Date(subscriptionStatus.next_billing_date).toLocaleDateString()}
+                      </Text>
+                    )}
+                  </View>
+                </Card>
+              )}
+            </>
           ) : null}
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.backButton}
               onPress={handleBack}
+              disabled={loadingStatus}
             >
-              <Text style={styles.backButtonText}>←</Text>
+              <Text style={[styles.backButtonText, loadingStatus && { opacity: 0.4 }]}>←</Text>
             </TouchableOpacity>
             <Text style={responsiveStyles.headerTitle}>Choose Your Plan</Text>
             <View style={styles.placeholder} />
@@ -330,7 +382,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                     <View style={styles.trialInfo}>
                       <Text style={responsiveStyles.trialTitle}>Start your free trial today!</Text>
                       <Text style={responsiveStyles.trialSubtext}>
-                        Free until {calculateTrialEndDate()}, then $8/month
+                        Free until {calculateTrialEndDate()}, then $3/week or $10/month
                       </Text>
                     </View>
                   </View>
@@ -344,7 +396,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                       key={plan.id}
                       style={[
                         styles.planCard,
-                        selectedPlan === plan.id && styles.planCardSelected,
+                        selectedPlanId === plan.id && styles.planCardSelected,
                         plan.popular && styles.planCardPopular
                       ]}
                       onPress={() => handlePlanSelect(plan.id)}
@@ -383,16 +435,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                           </View>
                         ))}
                       </View>
-                      <View style={styles.planSelection}>
-                        <View style={[
-                          styles.radioButton,
-                          selectedPlan === plan.id && styles.radioButtonSelected
-                        ]}>
-                          {selectedPlan === plan.id && (
-                            <View style={styles.radioButtonInner} />
-                          )}
-                        </View>
-                      </View>
+                      {/* Removed radio button/circle for cleaner look */}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -409,8 +452,14 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 size="lg"
                 onPress={handleContinue}
                 style={styles.primaryButton}
-                disabled={showTrialOption && selectedPlan === 'trial' && onActiveTrial}
+                disabled={showTrialOption && selectedPlan === 'trial' && onActiveTrial || continueLoading}
               />
+            )}
+            {continueLoading && (
+              <ActivityIndicator size="small" color={theme.colors.primary[500]} style={{ marginTop: 8 }} />
+            )}
+            {continueError && (
+              <Text style={{ color: theme.colors.error[600], textAlign: 'center', marginTop: 8 }}>{continueError}</Text>
             )}
             {showManage && (
               <Button
@@ -431,6 +480,11 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 You are subscribed to the {subscriptionStatus.planType} plan. Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
               </Text>
             )}
+            {onActiveWeekly && (
+              <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
+                You are subscribed to the weekly plan. Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
+              </Text>
+            )}
             {onCancelledOrExpiredPaid && (
               <Text style={{ color: theme.colors.error[600], textAlign: 'center', marginTop: 8 }}>
                 Your subscription is {subscriptionStatus.status}.
@@ -441,11 +495,11 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 Your trial has expired.
               </Text>
             )}
-            <TouchableOpacity style={styles.skipButton} onPress={() => onNavigate?.('welcome')}>
+            <TouchableOpacity style={styles.skipButton} onPress={() => setShowSkipModal(true)}>
               <Text style={responsiveStyles.skipButtonText}>Maybe later</Text>
             </TouchableOpacity>
             <Text style={responsiveStyles.disclaimerText}>
-              Cancel anytime. No commitment required.
+              You can always subscribe later from Settings.
             </Text>
           </View>
         </ScrollView>
@@ -457,6 +511,25 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
           showThreshold={150}
         />
       </SafeAreaView>
+      <Modal
+        visible={showSkipModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSkipModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, width: 320, alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12 }}>Skip Subscription?</Text>
+            <Text style={{ fontSize: 15, color: theme.colors.neutral[700], textAlign: 'center', marginBottom: 24 }}>
+              Some features may be limited until you subscribe. You can always subscribe later from Settings.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Button title="Cancel" variant="ghost" onPress={() => setShowSkipModal(false)} style={{ flex: 1 }} />
+              <Button title="Continue" variant="primary" onPress={() => { setShowSkipModal(false); onNavigate?.('dashboard'); }} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -734,3 +807,12 @@ const styles = StyleSheet.create({
 });
 
 export default SubscriptionScreen; 
+
+// Export canCreateReminders for use in other screens
+export const canCreateReminders = (subscriptionStatus: any) => {
+  if (!subscriptionStatus) return false;
+  if (subscriptionStatus.status === 'active' && (subscriptionStatus.planType === 'weekly' || subscriptionStatus.planType === 'monthly' || subscriptionStatus.planType === 'yearly')) return true;
+  if (subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && !subscriptionStatus.isTrialExpired) return true;
+  return false;
+};
+// In other screens, use: if (!canCreateReminders(subscriptionStatus)) { /* block creation and show modal/toast */ } 
