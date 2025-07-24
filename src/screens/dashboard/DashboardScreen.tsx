@@ -664,63 +664,83 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </Pressable>
           </View>
           {/* Profile Dropdown Modal (top right, elegant, correct order) */}
-          <Modal
-            visible={showProfileMenu}
-            animationType="fade"
-            transparent={true}
-            onRequestClose={() => setShowProfileMenu(false)}
-          >
-            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' }} onPress={() => setShowProfileMenu(false)}>
-              <View style={{ position: 'absolute', top: 60, right: 16, minWidth: 260, backgroundColor: 'white', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 18, elevation: 16, alignItems: 'stretch' }}>
-                {/* Profile Details */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
-                    <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
+          {showProfileMenu && (
+            <Modal
+              visible={showProfileMenu}
+              animationType="fade"
+              transparent={true}
+              onRequestClose={() => setShowProfileMenu(false)}
+            >
+              <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' }} onPress={() => setShowProfileMenu(false)}>
+                <View style={{ position: 'absolute', top: 60, right: 16, minWidth: 260, backgroundColor: 'white', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 18, elevation: 16, alignItems: 'stretch' }}>
+                  {/* Profile Details */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
+                    </View>
                   </View>
+                  {/* Edit Profile */}
+                  <TouchableOpacity 
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setShowProfileMenu(false);
+                      onNavigate?.('editPartner');
+                    }}
+                  >
+                    <MaterialIcons name="edit" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuItemText, { color: theme.colors.primary[600] }]}>Edit Profile</Text>
+                  </TouchableOpacity>
+                  {/* Recent Activity */}
+                  <TouchableOpacity 
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setShowProfileMenu(false);
+                      onNavigate?.('recentActivity');
+                    }}
+                  >
+                    <MaterialIcons name="history" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuItemText, { color: theme.colors.primary[600] }]}>Recent Activity</Text>
+                  </TouchableOpacity>
+                  {/* Billing */}
+                  <TouchableOpacity 
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setShowProfileMenu(false);
+                      onNavigate?.('subscription');
+                    }}
+                  >
+                    <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuItemText, { color: theme.colors.success[600] }]}>Billing</Text>
+                  </TouchableOpacity>
+                  {/* Settings */}
+                  <TouchableOpacity 
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setShowProfileMenu(false);
+                      onNavigate?.('settings');
+                    }}
+                  >
+                    <MaterialIcons name="settings" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuItemText, { color: theme.colors.primary[600] }]}>Settings</Text>
+                  </TouchableOpacity>
+                  <View style={styles.menuDivider} />
+                  {/* Sign Out */}
+                  <TouchableOpacity 
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setShowProfileMenu(false);
+                      onLogout?.();
+                    }}
+                  >
+                    <MaterialIcons name="logout" size={22} color={theme.colors.error[500]} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuItemText, styles.logoutText]}>Sign Out</Text>
+                  </TouchableOpacity>
                 </View>
-                {/* Actions - Edit Profile, Recent Activity, Billing, Sign Out */}
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('editPartner'); }}
-                  accessibilityLabel="Edit Partner Profile"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="edit" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Edit Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('recentActivity'); }}
-                  accessibilityLabel="Recent Activity"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="history" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Recent Activity</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.success[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('subscription'); }}
-                  accessibilityLabel="Manage Plan"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.success[600], fontWeight: '600' }}>Billing</Text>
-                </TouchableOpacity>
-                <View style={{ height: 1, backgroundColor: theme.colors.neutral[100], marginVertical: 8 }} />
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.error[50] }}
-                  onPress={() => { setShowProfileMenu(false); onLogout && onLogout(); }}
-                  accessibilityLabel="Sign Out"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="logout" size={22} color={theme.colors.error[500]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.error[600], fontWeight: '600' }}>Sign Out</Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Modal>
+              </Pressable>
+            </Modal>
+          )}
           {/* This Week's Progress Card */}
           <Card style={{
             marginBottom: theme.spacing[6],
@@ -1441,80 +1461,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               activeOpacity={1}
             />
           )}
-
-          {/* Profile Menu */}
-          {showProfileMenu && (
-            <View style={responsiveStyles.profileMenu}>
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  console.log('Edit Partner menu item pressed');
-                  setShowProfileMenu(false);
-                  onNavigate?.('editPartner');
-                }}
-              >
-                <Text style={styles.menuItemEmoji}>👤</Text>
-                <Text style={styles.menuItemText}>Edit Partner</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  console.log('Manage Subscription menu item pressed');
-                  setShowProfileMenu(false);
-                  onNavigate?.('subscription');
-                }}
-              >
-                <Text style={styles.menuItemEmoji}>💳</Text>
-                <Text style={styles.menuItemText}>Manage Subscription</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  console.log('Settings menu item pressed');
-                  setShowProfileMenu(false);
-                  onNavigate?.('settings');
-                }}
-              >
-                <Text style={styles.menuItemEmoji}>⚙️</Text>
-                <Text style={styles.menuItemText}>Settings</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  console.log('Recent Activity menu item pressed');
-                  setShowProfileMenu(false);
-                  onNavigate?.('recentActivity');
-                }}
-              >
-                <Text style={styles.menuItemEmoji}>📊</Text>
-                <Text style={styles.menuItemText}>Recent Activity</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.menuDivider} />
-              
-              <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => {
-                  console.log('Sign Out menu item pressed');
-                  setShowProfileMenu(false);
-                  onLogout?.();
-                }}
-              >
-                <Text style={styles.menuItemEmoji}>👋</Text>
-                <Text style={[styles.menuItemText, styles.logoutText]}>Sign Out</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Scroll Indicator */}
-          <ScrollIndicator
-            scrollY={scrollY}
-            onPress={handleScrollToBottom}
-            showThreshold={200}
-          />
         </ScrollView>
       </SafeAreaView>
 

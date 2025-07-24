@@ -338,6 +338,12 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         return <RecentActivityScreen onNavigate={handleNavigate} />;
       case 'settings':
         return <SettingsScreen onNavigate={handleNavigate} subscriptionStatus={subscriptionStatus} />;
+      case 'privacySecurity':
+        return <PrivacySecurityScreen onNavigate={handleNavigate} />;
+      case 'notifications':
+        return <NotificationsScreen onNavigate={handleNavigate} />;
+      case 'helpSupport':
+        return <HelpSupportScreen onNavigate={handleNavigate} />;
       default:
         return (
           <DashboardScreen 
@@ -391,8 +397,6 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
           <AddReminderScreen
             onNavigate={handleNavigate}
             onReminderAdded={() => {
-              // Force a dashboard refresh by temporarily setting currentScreen to null
-              // This will trigger the dashboard to re-render and fetch fresh data
               setCurrentScreen('dashboard');
             }}
           />
@@ -413,27 +417,14 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
           />
         );
       case 'privacySecurity':
-        return (
-          <PrivacySecurityScreen
-            onNavigate={handleNavigate}
-          />
-        );
+        return <PrivacySecurityScreen onNavigate={handleNavigate} />;
       case 'notifications':
-        return (
-          <NotificationsScreen
-            onNavigate={handleNavigate}
-          />
-        );
+        return <NotificationsScreen onNavigate={handleNavigate} />;
       case 'helpSupport':
-        return (
-          <HelpSupportScreen
-            onNavigate={handleNavigate}
-          />
-        );
+        return <HelpSupportScreen onNavigate={handleNavigate} />;
       case 'recentActivity':
         return <RecentActivityScreen onNavigate={handleNavigate} />;
       case 'dashboard':
-        // This case handles when we explicitly navigate back to dashboard
         if (isAuthenticated && hasActiveSubscription && !isTrialExpired()) {
           return (
             <DashboardScreen 
