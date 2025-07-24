@@ -643,15 +643,84 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           )}
           scrollEventThrottle={16}
         >
-          {/* Header */}
-          <View style={{ paddingTop: 24, paddingBottom: 24, paddingHorizontal: 0 }}>
-            <Text style={[responsiveStyles.greeting, { fontSize: 28, fontWeight: '700', marginBottom: 2 }]}>{partnerName} <Text style={{ fontSize: 26 }}>{loveEmoji}</Text></Text>
-            <Text style={[responsiveStyles.date, { fontSize: 15, color: theme.colors.neutral[500], marginBottom: 8 }]}>{formatDate(today)}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: theme.colors.success[50], borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, marginTop: 2 }}>
-              <Text style={{ fontSize: 15, marginRight: 2 }}>🔥</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.success[600] }}>{streak}-day streak</Text>
+          {/* Header row: partner info (left), avatar/dropdown (right) - at very top of dashboard */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, marginTop: 24, paddingHorizontal: 0 }}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[responsiveStyles.greeting, { fontSize: 28, fontWeight: '700', marginBottom: 2 }]} numberOfLines={1} ellipsizeMode="tail">{partnerName} <Text style={{ fontSize: 26 }}>{loveEmoji}</Text></Text>
+              <Text style={[responsiveStyles.date, { fontSize: 15, color: theme.colors.neutral[500], marginBottom: 8 }]} numberOfLines={1} ellipsizeMode="tail">{formatDate(today)}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: theme.colors.success[50], borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, marginTop: 2 }}>
+                <Text style={{ fontSize: 15, marginRight: 2 }}>🔥</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.success[600] }}>{streak}-day streak</Text>
+              </View>
             </View>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 18, backgroundColor: theme.colors.primary[50], marginLeft: 8 }}
+              onPress={() => setShowProfileMenu(true)}
+              accessibilityLabel="Open Profile Menu"
+              accessibilityRole="button"
+            >
+              <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} />
+              <MaterialIcons name="expand-more" size={24} color={theme.colors.primary[400]} style={{ marginLeft: 4 }} />
+            </Pressable>
           </View>
+          {/* Profile Dropdown Modal (top right, elegant, correct order) */}
+          <Modal
+            visible={showProfileMenu}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={() => setShowProfileMenu(false)}
+          >
+            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' }} onPress={() => setShowProfileMenu(false)}>
+              <View style={{ position: 'absolute', top: 60, right: 16, minWidth: 260, backgroundColor: 'white', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 18, elevation: 16, alignItems: 'stretch' }}>
+                {/* Profile Details */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
+                  </View>
+                </View>
+                {/* Actions - Edit Profile, Recent Activity, Billing, Sign Out */}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('editPartner'); }}
+                  accessibilityLabel="Edit Partner Profile"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="edit" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Edit Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('recentActivity'); }}
+                  accessibilityLabel="Recent Activity"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="history" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Recent Activity</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.success[50] }}
+                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('subscription'); }}
+                  accessibilityLabel="Manage Plan"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.success[600], fontWeight: '600' }}>Billing</Text>
+                </TouchableOpacity>
+                <View style={{ height: 1, backgroundColor: theme.colors.neutral[100], marginVertical: 8 }} />
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.error[50] }}
+                  onPress={() => { setShowProfileMenu(false); onLogout && onLogout(); }}
+                  accessibilityLabel="Sign Out"
+                  accessibilityRole="button"
+                >
+                  <MaterialIcons name="logout" size={22} color={theme.colors.error[500]} style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 15, color: theme.colors.error[600], fontWeight: '600' }}>Sign Out</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Modal>
           {/* This Week's Progress Card */}
           <Card style={{
             marginBottom: theme.spacing[6],
@@ -1042,65 +1111,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-          {/* Profile Dropdown Modal (top right, elegant, correct order) */}
-          <Modal
-            visible={showProfileMenu}
-            animationType="fade"
-            transparent={true}
-            onRequestClose={() => setShowProfileMenu(false)}
-          >
-            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' }} onPress={() => setShowProfileMenu(false)}>
-              <View style={{ position: 'absolute', top: 60, right: 16, minWidth: 260, backgroundColor: 'white', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 18, elevation: 16, alignItems: 'stretch' }}>
-                {/* Profile Details */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
-                    <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
-                  </View>
-                </View>
-                {/* Actions - Edit Profile, Recent Activity, Billing, Sign Out */}
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('editPartner'); }}
-                  accessibilityLabel="Edit Partner Profile"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="edit" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Edit Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.primary[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('recentActivity'); }}
-                  accessibilityLabel="Recent Activity"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="history" size={22} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.primary[700], fontWeight: '600' }}>Recent Activity</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, marginBottom: 2, backgroundColor: theme.colors.success[50] }}
-                  onPress={() => { setShowProfileMenu(false); onNavigate && onNavigate('subscription'); }}
-                  accessibilityLabel="Manage Plan"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="credit-card" size={22} color={theme.colors.success[500]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.success[600], fontWeight: '600' }}>Billing</Text>
-                </TouchableOpacity>
-                <View style={{ height: 1, backgroundColor: theme.colors.neutral[100], marginVertical: 8 }} />
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.error[50] }}
-                  onPress={() => { setShowProfileMenu(false); onLogout && onLogout(); }}
-                  accessibilityLabel="Sign Out"
-                  accessibilityRole="button"
-                >
-                  <MaterialIcons name="logout" size={22} color={theme.colors.error[500]} style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 15, color: theme.colors.error[600], fontWeight: '600' }}>Sign Out</Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Modal>
-
           {/* Subscription Status - Moved to bottom */}
           {subscriptionPlan === 'trial' && trialDaysLeft !== undefined && (
             <Card style={styles.subscriptionCard}>
