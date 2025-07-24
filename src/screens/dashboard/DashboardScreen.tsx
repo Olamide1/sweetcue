@@ -158,6 +158,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // const [accountDeleted, setAccountDeleted] = useState(false);
   // Remove showDatePicker modal logic and use inline state
   // const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedReminder, setSelectedReminder] = useState<any>(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [modalActionLoading, setModalActionLoading] = useState(false);
 
   // Helper to show toast/snackbar
   const showToast = (message: string) => {
@@ -662,97 +665,105 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View style={styles.remindersContainer}>
                 {next3DaysReminders.map((reminder: any, idx: number) => (
                   <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
-                    <Card style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
-                      <View style={styles.reminderContent}>
-                        <View style={styles.reminderLeft}>
-                          <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                          <View style={styles.reminderInfo}>
-                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                            <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
-                              {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
-                            </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setSelectedReminder(reminder);
+                        setShowReminderModal(true);
+                      }}
+                    >
+                      <Card style={{ ...styles.reminderCard, ...styles.urgentReminderCard }}>
+                        <View style={styles.reminderContent}>
+                          <View style={styles.reminderLeft}>
+                            <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
+                            <View style={styles.reminderInfo}>
+                              <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                              <Text style={{ ...styles.reminderDate, ...styles.urgentReminderDate }}>
+                                {reminder.daysUntil === 0 ? 'Due Today' : new Date(reminder.scheduled_date).toLocaleDateString()}
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                        <View style={styles.reminderRight}>
-                          <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
-                            <Text style={styles.urgentDaysUntilText}>
-                              {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
-                            </Text>
-                          </View>
-                          {/* Modern Icon Button: Complete */}
-                          {reminder.type === 'reminder' && (
-                            <TouchableOpacity
-                              style={styles.completeIconButton}
-                              activeOpacity={0.7}
-                              onPress={async () => {
-                                next3DaysReminders[idx]._animating = true;
-                                setReminders([...reminders]);
-                                try {
-                                  const { error } = await reminderService.completeReminder(reminder.id);
-                                  if (error) {
-                                    showToast(error);
-                                  } else {
-                                    showToast('Marked as completed!');
-                                    setTimeout(async () => {
-                                      setRemindersLoading(true);
-                                      const { name, birthday, anniversary } = partnerProfile;
-                                      const partnerData = { name, birthday, anniversary };
-                                      const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                      setReminders(remindersSummary);
-                                      setRemindersLoading(false);
-                                    }, 400);
+                          <View style={styles.reminderRight}>
+                            <View style={{ ...styles.daysUntil, ...styles.urgentDaysUntil }}>
+                              <Text style={styles.urgentDaysUntilText}>
+                                {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
+                              </Text>
+                            </View>
+                            {/* Modern Icon Button: Complete */}
+                            {reminder.type === 'reminder' && (
+                              <TouchableOpacity
+                                style={styles.completeIconButton}
+                                activeOpacity={0.7}
+                                onPress={async () => {
+                                  next3DaysReminders[idx]._animating = true;
+                                  setReminders([...reminders]);
+                                  try {
+                                    const { error } = await reminderService.completeReminder(reminder.id);
+                                    if (error) {
+                                      showToast(error);
+                                    } else {
+                                      showToast('Marked as completed!');
+                                      setTimeout(async () => {
+                                        setRemindersLoading(true);
+                                        const { name, birthday, anniversary } = partnerProfile;
+                                        const partnerData = { name, birthday, anniversary };
+                                        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                        setReminders(remindersSummary);
+                                        setRemindersLoading(false);
+                                      }, 400);
+                                    }
+                                  } catch (err: any) {
+                                    showToast(err.message || 'Failed to complete reminder');
                                   }
-                                } catch (err: any) {
-                                  showToast(err.message || 'Failed to complete reminder');
-                                }
-                              }}
-                              accessibilityLabel="Mark as Completed"
-                            >
-                              <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
-                            </TouchableOpacity>
-                          )}
-                          {/* Delete Icon Button */}
-                          <TouchableOpacity
-                            style={[styles.completeIconButton, { marginLeft: 8 }]}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              Alert.alert(
-                                'Delete Reminder',
-                                'Are you sure you want to delete this reminder?',
-                                [
-                                  { text: 'Cancel', style: 'cancel' },
-                                  {
-                                    text: 'Delete',
-                                    style: 'destructive',
-                                    onPress: async () => {
-                                      try {
-                                        const { error } = await reminderService.deleteReminder(reminder.id);
-                                        if (error) {
-                                          showToast(error);
-                                        } else {
-                                          showToast('Reminder deleted');
-                                          setRemindersLoading(true);
-                                          const { name, birthday, anniversary } = partnerProfile;
-                                          const partnerData = { name, birthday, anniversary };
-                                          const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                          setReminders(remindersSummary);
-                                          setRemindersLoading(false);
+                                }}
+                                accessibilityLabel="Mark as Completed"
+                              >
+                                <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
+                              </TouchableOpacity>
+                            )}
+                            {/* Delete Icon Button */}
+                            <TouchableOpacity
+                              style={[styles.completeIconButton, { marginLeft: 8 }]}
+                              activeOpacity={0.7}
+                              onPress={() => {
+                                Alert.alert(
+                                  'Delete Reminder',
+                                  'Are you sure you want to delete this reminder?',
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                      text: 'Delete',
+                                      style: 'destructive',
+                                      onPress: async () => {
+                                        try {
+                                          const { error } = await reminderService.deleteReminder(reminder.id);
+                                          if (error) {
+                                            showToast(error);
+                                          } else {
+                                            showToast('Reminder deleted');
+                                            setRemindersLoading(true);
+                                            const { name, birthday, anniversary } = partnerProfile;
+                                            const partnerData = { name, birthday, anniversary };
+                                            const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                            setReminders(remindersSummary);
+                                            setRemindersLoading(false);
+                                          }
+                                        } catch (err: any) {
+                                          showToast(err.message || 'Failed to delete reminder');
                                         }
-                                      } catch (err: any) {
-                                        showToast(err.message || 'Failed to delete reminder');
                                       }
                                     }
-                                  }
-                                ]
-                              );
-                            }}
-                            accessibilityLabel="Delete Reminder"
-                          >
-                            <MaterialIcons name="delete-outline" size={28} color={theme.colors.error[500] || '#EF4444'} />
-                          </TouchableOpacity>
+                                  ]
+                                );
+                              }}
+                              accessibilityLabel="Delete Reminder"
+                            >
+                              <MaterialIcons name="delete-outline" size={28} color={theme.colors.error[500] || '#EF4444'} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
-                    </Card>
+                      </Card>
+                    </TouchableOpacity>
                   </Animated.View>
                 ))}
               </View>
@@ -820,52 +831,60 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View style={styles.remindersContainer}>
                 {futureReminders.map((reminder: any, idx: number) => (
                   <Animated.View key={reminder.id} style={{ opacity: reminder._animating ? 0.5 : 1 }}>
-                    <Card style={styles.reminderCard}>
-                      <View style={styles.reminderContent}>
-                        <View style={styles.reminderLeft}>
-                          <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
-                          <View style={styles.reminderInfo}>
-                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                            <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setSelectedReminder(reminder);
+                        setShowReminderModal(true);
+                      }}
+                    >
+                      <Card style={styles.reminderCard}>
+                        <View style={styles.reminderContent}>
+                          <View style={styles.reminderLeft}>
+                            <Text style={styles.reminderEmoji}>{reminder.emoji}</Text>
+                            <View style={styles.reminderInfo}>
+                              <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                              <Text style={styles.reminderDate}>{new Date(reminder.scheduled_date).toLocaleDateString()}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.reminderRight}>
+                            <Text style={styles.daysUntil}>{reminder.daysUntil}d</Text>
+                            {/* Modern Icon Button */}
+                            {reminder.type === 'reminder' && (
+                              <TouchableOpacity
+                                style={styles.completeIconButton}
+                                activeOpacity={0.7}
+                                onPress={async () => {
+                                  futureReminders[idx]._animating = true;
+                                  setReminders([...reminders]);
+                                  try {
+                                    const { error } = await reminderService.completeReminder(reminder.id);
+                                    if (error) {
+                                      showToast(error);
+                                    } else {
+                                      showToast('Marked as completed!');
+                                      setTimeout(async () => {
+                                        setRemindersLoading(true);
+                                        const { name, birthday, anniversary } = partnerProfile;
+                                        const partnerData = { name, birthday, anniversary };
+                                        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                        setReminders(remindersSummary);
+                                        setRemindersLoading(false);
+                                      }, 400);
+                                    }
+                                  } catch (err: any) {
+                                    showToast(err.message || 'Failed to complete reminder');
+                                  }
+                                }}
+                                accessibilityLabel="Mark as Completed"
+                              >
+                                <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
+                              </TouchableOpacity>
+                            )}
                           </View>
                         </View>
-                        <View style={styles.reminderRight}>
-                          <Text style={styles.daysUntil}>{reminder.daysUntil}d</Text>
-                          {/* Modern Icon Button */}
-                          {reminder.type === 'reminder' && (
-                            <TouchableOpacity
-                              style={styles.completeIconButton}
-                              activeOpacity={0.7}
-                              onPress={async () => {
-                                futureReminders[idx]._animating = true;
-                                setReminders([...reminders]);
-                                try {
-                                  const { error } = await reminderService.completeReminder(reminder.id);
-                                  if (error) {
-                                    showToast(error);
-                                  } else {
-                                    showToast('Marked as completed!');
-                                    setTimeout(async () => {
-                                      setRemindersLoading(true);
-                                      const { name, birthday, anniversary } = partnerProfile;
-                                      const partnerData = { name, birthday, anniversary };
-                                      const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                      setReminders(remindersSummary);
-                                      setRemindersLoading(false);
-                                    }, 400);
-                                  }
-                                } catch (err: any) {
-                                  showToast(err.message || 'Failed to complete reminder');
-                                }
-                              }}
-                              accessibilityLabel="Mark as Completed"
-                            >
-                              <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                    </Card>
+                      </Card>
+                    </TouchableOpacity>
                   </Animated.View>
                 ))}
               </View>
@@ -1146,6 +1165,122 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       </ScrollView>
                     </Card>
                   </RNSafeAreaView>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
+          )}
+
+          {/* Reminder Details Modal */}
+          {showReminderModal && selectedReminder && (
+            <Modal
+              visible
+              transparent
+              animationType="slide"
+              onRequestClose={() => setShowReminderModal(false)}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+                  <Card style={{ width: '95%', maxWidth: 420, padding: 0 }}>
+                    <View style={{ padding: 24 }}>
+                      <Text style={{ fontSize: 22, fontWeight: '700', marginBottom: 8 }}>{selectedReminder.title}</Text>
+                      <Text style={{ color: theme.colors.neutral[600], marginBottom: 8 }}>{selectedReminder.description}</Text>
+                      <Text style={{ color: theme.colors.primary[600], marginBottom: 8 }}>Date: {new Date(selectedReminder.scheduled_date).toLocaleDateString()}</Text>
+                      {selectedReminder.gesture && <Text style={{ color: theme.colors.neutral[700], marginBottom: 8 }}>Gesture: {selectedReminder.gesture}</Text>}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 }}>
+                        {/* Edit Action */}
+                        <TouchableOpacity
+                          style={{ padding: 12, borderRadius: 8, backgroundColor: theme.colors.primary[50], marginRight: 8, opacity: modalActionLoading ? 0.5 : 1 }}
+                          disabled={modalActionLoading}
+                          onPress={() => {
+                            setShowReminderModal(false);
+                            onNavigate && onNavigate('addReminder' as Screen);
+                          }}
+                        >
+                          <Text style={{ color: theme.colors.primary[600], fontWeight: '600' }}>Edit</Text>
+                        </TouchableOpacity>
+                        {/* Mark as Completed */}
+                        {!selectedReminder.is_completed && (
+                          <TouchableOpacity
+                            style={{ padding: 12, borderRadius: 8, backgroundColor: theme.colors.success[50], marginRight: 8, opacity: modalActionLoading ? 0.5 : 1 }}
+                            disabled={modalActionLoading}
+                            onPress={async () => {
+                              setModalActionLoading(true);
+                              try {
+                                const { error } = await reminderService.completeReminder(selectedReminder.id);
+                                if (error) {
+                                  showToast(error);
+                                } else {
+                                  showToast('Marked as completed!');
+                                  setShowReminderModal(false);
+                                  setRemindersLoading(true);
+                                  const { name, birthday, anniversary } = partnerProfile;
+                                  const partnerData = { name, birthday, anniversary };
+                                  const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                  setReminders(remindersSummary);
+                                  setRemindersLoading(false);
+                                }
+                              } catch (err: any) {
+                                showToast(err.message || 'Failed to complete reminder');
+                              } finally {
+                                setModalActionLoading(false);
+                              }
+                            }}
+                          >
+                            <Text style={{ color: theme.colors.success[600], fontWeight: '600' }}>Mark as Completed</Text>
+                          </TouchableOpacity>
+                        )}
+                        {/* Delete Action */}
+                        <TouchableOpacity
+                          style={{ padding: 12, borderRadius: 8, backgroundColor: theme.colors.error[50], opacity: modalActionLoading ? 0.5 : 1 }}
+                          disabled={modalActionLoading}
+                          onPress={() => {
+                            Alert.alert(
+                              'Delete Reminder',
+                              'Are you sure you want to delete this reminder?',
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Delete',
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    setModalActionLoading(true);
+                                    try {
+                                      const { error } = await reminderService.deleteReminder(selectedReminder.id);
+                                      if (error) {
+                                        showToast(error);
+                                      } else {
+                                        showToast('Reminder deleted');
+                                        setShowReminderModal(false);
+                                        setRemindersLoading(true);
+                                        const { name, birthday, anniversary } = partnerProfile;
+                                        const partnerData = { name, birthday, anniversary };
+                                        const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                        setReminders(remindersSummary);
+                                        setRemindersLoading(false);
+                                      }
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to delete reminder');
+                                    } finally {
+                                      setModalActionLoading(false);
+                                    }
+                                  }
+                                }
+                              ]
+                            );
+                          }}
+                        >
+                          <Text style={{ color: theme.colors.error[600], fontWeight: '600' }}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity
+                        style={{ marginTop: 24, alignSelf: 'center', opacity: modalActionLoading ? 0.5 : 1 }}
+                        disabled={modalActionLoading}
+                        onPress={() => setShowReminderModal(false)}
+                      >
+                        <Text style={{ color: theme.colors.neutral[500], fontWeight: '500' }}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Card>
                 </View>
               </TouchableWithoutFeedback>
             </Modal>
