@@ -783,13 +783,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                               {reminder.daysUntil === 0 ? 'Now' : `${reminder.daysUntil}d`}
                             </Text>
                           </View>
-                          {/* Modern Icon Button */}
+                          {/* Modern Icon Button: Complete */}
                           {reminder.type === 'reminder' && (
                             <TouchableOpacity
                               style={styles.completeIconButton}
                               activeOpacity={0.7}
                               onPress={async () => {
-                                // Animate out (optional: fade/slide)
                                 next3DaysReminders[idx]._animating = true;
                                 setReminders([...reminders]);
                                 try {
@@ -798,7 +797,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                     showToast(error);
                                   } else {
                                     showToast('Marked as completed!');
-                                    // Remove from list after short delay
                                     setTimeout(async () => {
                                       setRemindersLoading(true);
                                       const { name, birthday, anniversary } = partnerProfile;
@@ -817,6 +815,45 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                               <MaterialIcons name={reminder._animating ? 'check-circle' : 'check-circle-outline'} size={28} color={reminder._animating ? theme.colors.success[600] || '#22C55E' : theme.colors.neutral[400]} />
                             </TouchableOpacity>
                           )}
+                          {/* Delete Icon Button */}
+                          <TouchableOpacity
+                            style={[styles.completeIconButton, { marginLeft: 8 }]}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              Alert.alert(
+                                'Delete Reminder',
+                                'Are you sure you want to delete this reminder?',
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                      try {
+                                        const { error } = await reminderService.deleteReminder(reminder.id);
+                                        if (error) {
+                                          showToast(error);
+                                        } else {
+                                          showToast('Reminder deleted');
+                                          setRemindersLoading(true);
+                                          const { name, birthday, anniversary } = partnerProfile;
+                                          const partnerData = { name, birthday, anniversary };
+                                          const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                          setReminders(remindersSummary);
+                                          setRemindersLoading(false);
+                                        }
+                                      } catch (err: any) {
+                                        showToast(err.message || 'Failed to delete reminder');
+                                      }
+                                    }
+                                  }
+                                ]
+                              );
+                            }}
+                            accessibilityLabel="Delete Reminder"
+                          >
+                            <MaterialIcons name="delete-outline" size={28} color={theme.colors.error[500] || '#EF4444'} />
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </Card>
