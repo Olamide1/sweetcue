@@ -11,6 +11,7 @@ import DatePicker from '../../components/DatePicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format, isThisWeek, parseISO } from 'date-fns';
 import { subscriptionService } from '../../services/subscriptions';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'recentActivity';
 
@@ -186,6 +187,16 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   useEffect(() => {
     recalculateWeekProgress();
   }, []);
+
+  const [prevStreak, setPrevStreak] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  useEffect(() => {
+    if (streak > prevStreak) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
+    }
+    setPrevStreak(streak);
+  }, [streak]);
 
   // Helper to show toast/snackbar
   const showToast = (message: string) => {
@@ -669,6 +680,15 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      {showConfetti && (
+        <ConfettiCannon
+          count={120}
+          origin={{ x: 0, y: 0 }}
+          fadeOut
+          explosionSpeed={350}
+          fallSpeed={3000}
+        />
+      )}
       {/* Modern Gradient Background */}
       <LinearGradient
         colors={['#FFF0F5', '#FFFFFF', '#F8F0FF']}
@@ -953,7 +973,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                       setReminders(remindersSummary);
                                       await recalculateWeekProgress();
                                       setRemindersLoading(false);
-                                    }, 400);
+                                    }, 500); // Increased delay to 500ms for DB consistency
                                   }
                                 } catch (err: any) {
                                   showToast(err.message || 'Failed to complete reminder');
@@ -1098,7 +1118,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                         setReminders(remindersSummary);
                                         await recalculateWeekProgress();
                                         setRemindersLoading(false);
-                                      }, 400);
+                                      }, 500); // Increased delay to 500ms for DB consistency
                                     }
                                   } catch (err: any) {
                                     showToast(err.message || 'Failed to complete reminder');
