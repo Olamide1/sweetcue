@@ -168,6 +168,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
   }, [isAuthenticated]);
 
   const handleNavigate = (screen: Screen) => {
+    console.log('handleNavigate called with:', screen);
     setCurrentScreen(screen);
   };
 
@@ -301,6 +302,17 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
 
   // If authenticated and subscribed, show dashboard ONLY if currentScreen is dashboard
   if (isAuthenticated && hasActiveSubscription && !isTrialExpired()) {
+    if (currentScreen === 'subscription') {
+      return (
+        <SubscriptionScreen
+          onNavigate={handleNavigate}
+          onSubscriptionComplete={handleSubscriptionComplete}
+          userEmail={userData.email}
+          partnerName={userData.partnerName}
+          subscriptionStatus={subscriptionStatus}
+        />
+      );
+    }
     switch (currentScreen) {
       case 'dashboard':
         return (
@@ -359,6 +371,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
 
   // Otherwise show appropriate flow
   const renderScreen = () => {
+    console.log('renderScreen: currentScreen =', currentScreen);
     switch (currentScreen) {
       case 'welcome':
         return <WelcomeScreen onNavigate={handleNavigate} />;
