@@ -1,0 +1,30 @@
+{
+  "name": "sweetcue-landing",
+  "version": "1.0.0",
+  "description": "SweetCue Landing Page - Convert intent into concrete actions",
+  "main": "serve.js",
+  "scripts": {
+    "start": "node serve.js",
+    "dev": "node serve.js",
+    "serve": "node serve.js"
+  },
+  "keywords": [
+    "landing-page",
+    "sweetcue",
+    "relationship-app",
+    "react-native"
+  ],
+  "author": "SweetCue Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sweetcue/landing-page.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sweetcue/landing-page/issues"
+  },
+  "homepage": "https://sweetcue.app"
+} 

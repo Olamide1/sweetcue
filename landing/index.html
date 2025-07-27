@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SweetCue - The App That Remembers What Matters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Sprout DS - Elevated Design System */
+        :root {
+            /* Colors from PRD */
+            --primary-50: #FFF5F7;
+            --primary-100: #FFE8ED;
+            --primary-200: #FFD1DB;
+            --primary-300: #FFB6C1; /* Main primary */
+            --primary-400: #FF9BB0;
+            --primary-500: #FF7A9A;
+            --primary-600: #E85D87;
+            --primary-700: #D14374;
+            --primary-800: #B93B6B;
+            --primary-900: #A13362;
+            
+            --accent-50: #F0F4FF;
+            --accent-100: #E1E9FF;
+            --accent-200: #C3D3FF;
+            --accent-300: #A5BDFF;
+            --accent-400: #87A7FF;
+            --accent-500: #6F8DF6; /* Main accent */
+            --accent-600: #5B7AE8;
+            --accent-700: #4967DA;
+            --accent-800: #3754CC;
+            --accent-900: #2541BE;
+            
+            --neutral-900: #0C0C0C;
+            --neutral-800: #1A1A1A;
+            --neutral-700: #2D2D2D;
+            --neutral-600: #404040;
+            --neutral-500: #525252;
+            --neutral-400: #737373;
+            --neutral-300: #A3A3A3;
+            --neutral-200: #D4D4D4;
+            --neutral-100: #E5E5E5;
+            --neutral-50: #F8F8F8;
+            
+            /* Spacing - 4pt grid from PRD */
+            --spacing-1: 4px;
+            --spacing-2: 8px;
+            --spacing-3: 12px;
+            --spacing-4: 16px;
+            --spacing-5: 20px;
+            --spacing-6: 24px;
+            --spacing-8: 32px;
+            --spacing-10: 40px;
+            --spacing-12: 48px;
+            --spacing-16: 64px;
+            --spacing-20: 80px;
+            --spacing-24: 96px;
+            --spacing-32: 128px;
+            --spacing-40: 160px;
+            
+            /* Typography - Inter font with PRD scale */
+            --font-xs: 12px;
+            --font-sm: 14px;
+            --font-base: 16px;
+            --font-lg: 20px;
+            --font-xl: 28px;
+            --font-2xl: 40px;
+            --font-3xl: 48px;
+            --font-4xl: 64px;
+            
+            /* Radius from PRD */
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            /* Elevation from PRD */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--neutral-900);
+            background-color: #FFFFFF;
+            overflow-x: hidden;
+            font-weight: 400;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-4);
+        }
+        
+        /* Sophisticated animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #FFFFFF 0%, var(--primary-50) 100%);
+            padding: var(--spacing-8) 0;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 1px solid var(--neutral-100);
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 80%, var(--primary-100) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, var(--accent-100) 0%, transparent 50%);
+            opacity: 0.6;
+        }
+        
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .logo {
+            font-size: var(--font-xl);
+            font-weight: 700;
+            color: var(--primary-600);
+            letter-spacing: -0.025em;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: var(--spacing-8);
+            list-style: none;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: var(--neutral-700);
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+            font-size: var(--font-sm);
+        }
+        
+        .nav-links a:hover {
+            color: var(--primary-600);
+        }
+        
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary-300);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+        
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: var(--spacing-40) 0;
+            position: relative;
+            z-index: 2;
+            background: linear-gradient(135deg, #FFFFFF 0%, var(--primary-50) 100%);
+        }
+        
+        .hero h1 {
+            font-size: var(--font-4xl);
+            font-weight: 800;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-6);
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        .hero .subtitle {
+            font-size: var(--font-xl);
+            color: var(--neutral-600);
+            margin-bottom: var(--spacing-8);
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            font-weight: 400;
+            line-height: 1.4;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+        
+        .hero .highlight {
+            color: var(--primary-600);
+            font-weight: 600;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: var(--spacing-4);
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-5) var(--spacing-8);
+            border-radius: var(--radius-lg);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: var(--font-base);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 56px;
+            position: relative;
+            overflow: hidden;
+            letter-spacing: -0.01em;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.6s ease;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+            background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--primary-600);
+            border: 2px solid var(--primary-200);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--primary-50);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-icon {
+            margin-left: var(--spacing-2);
+            font-size: var(--font-lg);
+        }
+        
+        /* Pain Points Section */
+        .pain-points {
+            padding: var(--spacing-40) 0;
+            background: linear-gradient(135deg, #FFFFFF 0%, var(--neutral-50) 100%);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: var(--font-3xl);
+            font-weight: 700;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-6);
+            letter-spacing: -0.02em;
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: var(--font-lg);
+            color: var(--neutral-600);
+            margin-bottom: var(--spacing-16);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            font-weight: 400;
+        }
+        
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: var(--spacing-8);
+            margin-top: var(--spacing-16);
+        }
+        
+        .pain-card {
+            background: white;
+            padding: var(--spacing-8);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--neutral-100);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pain-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-400), var(--accent-500));
+        }
+        
+        .pain-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .pain-emoji {
+            font-size: 48px;
+            margin-bottom: var(--spacing-4);
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        .pain-card h3 {
+            font-size: var(--font-lg);
+            font-weight: 600;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-3);
+            line-height: 1.3;
+        }
+        
+        .pain-card p {
+            color: var(--neutral-600);
+            font-size: var(--font-base);
+            line-height: 1.6;
+        }
+        
+        /* Solution Section */
+        .solution {
+            padding: var(--spacing-40) 0;
+            background: linear-gradient(135deg, var(--primary-50) 0%, #FFFFFF 100%);
+        }
+        
+        .solution-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-16);
+            align-items: center;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .solution-text h2 {
+            font-size: var(--font-3xl);
+            font-weight: 700;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-6);
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+        
+        .solution-text p {
+            font-size: var(--font-lg);
+            color: var(--neutral-600);
+            margin-bottom: var(--spacing-6);
+            line-height: 1.6;
+        }
+        
+        .solution-features {
+            list-style: none;
+            margin-top: var(--spacing-8);
+        }
+        
+        .solution-features li {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--spacing-4);
+            font-size: var(--font-base);
+            color: var(--neutral-700);
+        }
+        
+        .solution-features li::before {
+            content: '✓';
+            color: var(--primary-500);
+            font-weight: bold;
+            margin-right: var(--spacing-3);
+            font-size: var(--font-lg);
+        }
+        
+        .solution-visual {
+            text-align: center;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .solution-visual .phone-mockup {
+            width: 280px;
+            height: 560px;
+            background: linear-gradient(135deg, var(--primary-300), var(--accent-500));
+            border-radius: var(--radius-xl);
+            margin: 0 auto;
+            position: relative;
+            box-shadow: var(--shadow-xl);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: var(--font-2xl);
+            font-weight: 700;
+        }
+        
+        /* Features Section */
+        .features {
+            padding: var(--spacing-40) 0;
+            background: white;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-8);
+            margin-top: var(--spacing-16);
+        }
+        
+        .feature-card {
+            background: white;
+            padding: var(--spacing-8);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--neutral-100);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            text-align: center;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-300), var(--accent-500));
+            border-radius: var(--radius-xl);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--spacing-6);
+            color: white;
+            font-size: 32px;
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        .feature-card h3 {
+            font-size: var(--font-lg);
+            font-weight: 600;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-3);
+        }
+        
+        .feature-card p {
+            color: var(--neutral-600);
+            font-size: var(--font-base);
+            line-height: 1.6;
+        }
+        
+        /* Pricing Section */
+        .pricing {
+            padding: var(--spacing-40) 0;
+            background: linear-gradient(135deg, var(--neutral-50) 0%, var(--primary-50) 100%);
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-8);
+            margin-top: var(--spacing-16);
+        }
+        
+        .pricing-card {
+            background: white;
+            padding: var(--spacing-8);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--neutral-100);
+            text-align: center;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .pricing-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .pricing-card.featured {
+            border: 3px solid var(--primary-300);
+            transform: scale(1.05);
+            background: linear-gradient(135deg, white 0%, var(--primary-50) 100%);
+        }
+        
+        .pricing-card.featured::before {
+            content: 'Most Popular';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-500);
+            color: white;
+            padding: var(--spacing-2) var(--spacing-4);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        
+        .price {
+            font-size: var(--font-3xl);
+            font-weight: 800;
+            color: var(--neutral-900);
+            margin-bottom: var(--spacing-2);
+            letter-spacing: -0.02em;
+        }
+        
+        .price-period {
+            color: var(--neutral-600);
+            font-size: var(--font-sm);
+            font-weight: 500;
+        }
+        
+        .pricing-features {
+            list-style: none;
+            margin: var(--spacing-6) 0;
+        }
+        
+        .pricing-features li {
+            padding: var(--spacing-2) 0;
+            color: var(--neutral-600);
+            font-size: var(--font-sm);
+            position: relative;
+        }
+        
+        .pricing-features li::before {
+            content: '✓';
+            color: var(--primary-500);
+            font-weight: bold;
+            margin-right: var(--spacing-2);
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            padding: var(--spacing-40) 0;
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            text-align: center;
+            color: white;
+        }
+        
+        .cta-section h2 {
+            font-size: var(--font-3xl);
+            font-weight: 700;
+            margin-bottom: var(--spacing-6);
+            letter-spacing: -0.02em;
+        }
+        
+        .cta-section p {
+            font-size: var(--font-lg);
+            margin-bottom: var(--spacing-8);
+            opacity: 0.9;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .cta-buttons-large {
+            display: flex;
+            gap: var(--spacing-4);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn-large {
+            padding: var(--spacing-6) var(--spacing-10);
+            font-size: var(--font-lg);
+            min-height: 64px;
+        }
+        
+        .btn-white {
+            background: white;
+            color: var(--primary-600);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .btn-white:hover {
+            background: var(--neutral-50);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        /* Footer */
+        .footer {
+            background-color: var(--neutral-900);
+            color: white;
+            padding: var(--spacing-16) 0;
+            text-align: center;
+        }
+        
+        .footer p {
+            color: var(--neutral-300);
+            font-size: var(--font-sm);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            
+            .hero h1 {
+                font-size: var(--font-2xl);
+            }
+            
+            .hero .subtitle {
+                font-size: var(--font-lg);
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .solution-content {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-8);
+            }
+            
+            .features-grid,
+            .pain-grid,
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .section-title {
+                font-size: var(--font-2xl);
+            }
+        }
+        
+        /* Animation */
+        .animate-fade-in {
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        .animate-fade-in-delay-1 {
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+        
+        .animate-fade-in-delay-2 {
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <div class="logo">SweetCue</div>
+                <ul class="nav-links">
+                    <li><a href="#pain-points">The Panic</a></li>
+                    <li><a href="#solution">The Fix</a></li>
+                    <li><a href="#pricing">Get Started</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1 class="animate-fade-in">The App That Remembers<br><span class="highlight">What Matters</span></h1>
+            <p class="subtitle animate-fade-in-delay-1">Stop forgetting birthdays, anniversaries, and those little moments that make your relationship special. SweetCue remembers so you don't have to.</p>
+            <div class="cta-buttons animate-fade-in-delay-2">
+                <a href="#download" class="btn btn-primary">Download SweetCue <span class="btn-icon">→</span></a>
+                <a href="#learn-more" class="btn btn-secondary">See How It Works</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pain Points Section -->
+    <section id="pain-points" class="pain-points">
+        <div class="container">
+            <h2 class="section-title">The Panic You Know Too Well</h2>
+            <p class="section-subtitle">These moments of panic and guilt are all too common. But they don't have to be.</p>
+            <div class="pain-grid">
+                <div class="pain-card">
+                    <div class="pain-emoji">😱</div>
+                    <h3>"Oh no, I forgot our anniversary!"</h3>
+                    <p>You wake up in a cold sweat, realizing you completely forgot your partner's birthday or anniversary. Again. The guilt is overwhelming.</p>
+                </div>
+                <div class="pain-card">
+                    <div class="pain-emoji">😔</div>
+                    <h3>"I want to be more thoughtful"</h3>
+                    <p>You have the best intentions, but life gets busy. Those sweet gestures you planned get lost in the chaos of everyday life.</p>
+                </div>
+                <div class="pain-card">
+                    <div class="pain-emoji">😤</div>
+                    <h3>"I'm tired of feeling guilty"</h3>
+                    <p>You're constantly apologizing for forgetting important dates or missing opportunities to show you care. It's exhausting.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section id="solution" class="solution">
+        <div class="container">
+            <div class="solution-content">
+                <div class="solution-text">
+                    <h2>SweetCue Remembers<br>So You Don't Have To</h2>
+                    <p>We've built the most thoughtful relationship app ever created. SweetCue learns about your partner once, then handles all the remembering for you.</p>
+                    <ul class="solution-features">
+                        <li>Never miss another birthday or anniversary</li>
+                        <li>Get personalized gesture suggestions</li>
+                        <li>Receive gentle reminders at the perfect time</li>
+                        <li>Track your relationship progress</li>
+                    </ul>
+                </div>
+                <div class="solution-visual">
+                    <div class="phone-mockup">
+                        💕
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">How SweetCue Transforms Your Relationship</h2>
+            <p class="section-subtitle">Every feature designed to make your relationship stronger, one thoughtful moment at a time.</p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📅</div>
+                    <h3>Smart Reminders</h3>
+                    <p>Never miss birthdays, anniversaries, or important dates. We'll remind you before it's too late.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💝</div>
+                    <h3>Gesture Library</h3>
+                    <p>Hundreds of thoughtful ideas from simple texts to grand gestures, all tailored to your partner's love language.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Personalized for You</h3>
+                    <p>Tell us about your partner once and we'll suggest perfect gestures based on their preferences and love language.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Gentle Nudges</h3>
+                    <p>Get friendly push notifications at the perfect time, not annoying spam. We're here to help, not nag.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Private & Secure</h3>
+                    <p>Your relationship details stay private. Optional biometric lock keeps your love life organized and secure.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Track Your Progress</h3>
+                    <p>See your relationship satisfaction grow over time with completion tracking and streak counters.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="container">
+            <h2 class="section-title">Start Free, Stay in Love</h2>
+            <p class="section-subtitle">Choose the plan that works for your relationship. No commitment, no pressure.</p>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Free Trial</h3>
+                    <div class="price">$0</div>
+                    <div class="price-period">7 days</div>
+                    <ul class="pricing-features">
+                        <li>Full access to all features</li>
+                        <li>Unlimited reminders</li>
+                        <li>Partner profile & preferences</li>
+                        <li>No credit card required</li>
+                    </ul>
+                    <a href="#download" class="btn btn-primary">Start Free Trial</a>
+                </div>
+                <div class="pricing-card featured">
+                    <h3>Weekly Plan</h3>
+                    <div class="price">$3</div>
+                    <div class="price-period">per week</div>
+                    <ul class="pricing-features">
+                        <li>All premium features</li>
+                        <li>Unlimited reminders</li>
+                        <li>Advanced scheduling</li>
+                        <li>Gift recommendations</li>
+                        <li>Calendar integration</li>
+                    </ul>
+                    <a href="#download" class="btn btn-primary">Choose Weekly</a>
+                </div>
+                <div class="pricing-card">
+                    <h3>Monthly Plan</h3>
+                    <div class="price">$10</div>
+                    <div class="price-period">per month</div>
+                    <ul class="pricing-features">
+                        <li>All premium features</li>
+                        <li>Unlimited reminders</li>
+                        <li>Advanced scheduling</li>
+                        <li>Gift recommendations</li>
+                        <li>Calendar integration</li>
+                    </ul>
+                    <a href="#download" class="btn btn-primary">Choose Monthly</a>
+                </div>
+                <div class="pricing-card">
+                    <h3>Yearly Plan</h3>
+                    <div class="price">$72</div>
+                    <div class="price-period">per year (Save $48!)</div>
+                    <ul class="pricing-features">
+                        <li>All premium features</li>
+                        <li>Priority support</li>
+                        <li>Advanced analytics</li>
+                        <li>Custom reminder types</li>
+                        <li>Relationship insights</li>
+                    </ul>
+                    <a href="#download" class="btn btn-primary">Choose Yearly</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="download" class="cta-section">
+        <div class="container">
+            <h2>Ready to Never Forget Again?</h2>
+            <p>Join thousands of couples who've transformed their relationships with SweetCue. Download now and start your free trial.</p>
+            <div class="cta-buttons-large">
+                <a href="#app-store" class="btn btn-white btn-large">Download on App Store</a>
+                <a href="#google-play" class="btn btn-white btn-large">Get it on Google Play</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 SweetCue. Built with love for stronger relationships.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Sophisticated scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-fade-in');
+                }
+            });
+        }, observerOptions);
+
+        // Observe all cards
+        document.querySelectorAll('.feature-card, .pain-card, .pricing-card').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Sophisticated button interactions
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px) scale(1.02)';
+            });
+            
+            btn.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Add download functionality
+        document.querySelectorAll('a[href="#download"], a[href="#app-store"], a[href="#google-play"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Here you would add actual app store links
+                alert('App store links will be added when the app is published!');
+            });
+        });
+    </script>
+</body>
+</html> 
