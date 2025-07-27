@@ -41,6 +41,11 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [continueLoading, setContinueLoading] = useState(false);
   const [continueError, setContinueError] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [planToConfirm, setPlanToConfirm] = useState<PricingPlan | null>(null);
+  const [highlightPlans, setHighlightPlans] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [hasEverHadTrial, setHasEverHadTrial] = useState(false);
 
   // Use prop if provided, otherwise local state
   const [subscriptionStatus, setSubscriptionStatus] = useState<any>(subscriptionStatusProp);
@@ -59,6 +64,10 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
     };
     fetchStatus();
   }, [subscriptionStatusProp]);
+
+  useEffect(() => {
+    subscriptionService.hasEverHadTrial().then(setHasEverHadTrial);
+  }, []);
 
   // Utility to check if user can create reminders (export for use in other screens)
   const canCreateReminders = () => {
@@ -231,18 +240,23 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   };
 
   const handlePlanSelect = (planId: 'trial' | 'weekly' | 'monthly' | 'yearly') => {
-    setSelectedPlan(planId);
+    const plan = plans.find(p => p.id === planId);
+    setPlanToConfirm(plan || null);
+    setShowConfirmModal(true);
   };
 
-  const handleContinue = async () => {
+  const handleConfirmPlan = async () => {
+    if (!planToConfirm) return;
+    setSelectedPlan(planToConfirm.id);
+    setShowConfirmModal(false);
     setContinueLoading(true);
     setContinueError(null);
     let result;
     try {
-      if (selectedPlan === 'trial') {
+      if (planToConfirm.id === 'trial') {
         result = await subscriptionService.startTrial();
       } else {
-        result = await subscriptionService.upgradeToPaidPlan(selectedPlan);
+        result = await subscriptionService.upgradeToPaidPlan(planToConfirm.id);
       }
       if (result.error) {
         setContinueError(result.error);
@@ -253,7 +267,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
       const status = await subscriptionService.getSubscriptionStatus();
       setSubscriptionStatus(status);
       setContinueLoading(false);
-      onSubscriptionComplete?.(selectedPlan);
+      onSubscriptionComplete?.(planToConfirm.id);
     } catch (err: any) {
       setContinueError(err.message || 'An error occurred');
       setContinueLoading(false);
@@ -269,17 +283,37 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
     setSelectedPlan('monthly');
   };
 
+  const handleChangePlan = () => {
+    setHighlightPlans(true);
+    setTimeout(() => setHighlightPlans(false), 1200);
+    scrollViewRef.current?.scrollTo({ y: 400, animated: true });
+  };
+
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      'Cancel Subscription',
+      'Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.',
+      [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
+          await subscriptionService.cancelSubscription();
+          const status = await subscriptionService.getSubscriptionStatus();
+          setSubscriptionStatus(status);
+        }},
+      ]
+    );
+  };
+
+  const handleMaybeLater = () => onNavigate?.('dashboard');
+
   const selectedPlanData = plans.find(p => p.id === selectedPlan);
   const selectedPlanId = subscriptionStatus?.planType || selectedPlan;
 
-  const handleBack = async () => {
-    const status = await subscriptionService.getSubscriptionStatus();
-    if (status.isActive && !status.isTrialExpired) {
-      onNavigate?.('dashboard');
-    } else {
-      onNavigate?.('dashboard'); // fallback, always go to dashboard
-    }
-  };
+  // Refine plan card filtering logic
+  const eligibleForTrial = !hasEverHadTrial && (!subscriptionStatus || !subscriptionStatus.hasSubscription || subscriptionStatus.status === null);
+  const filteredPlans = eligibleForTrial
+    ? plans
+    : plans.filter(plan => plan.id !== 'trial');
 
   // Determine subscription states
   const onActiveTrial = subscriptionStatus && subscriptionStatus.hasSubscription && subscriptionStatus.planType === 'trial' && subscriptionStatus.trialDaysLeft > 0 && !subscriptionStatus.isTrialExpired;
@@ -295,6 +329,8 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
   const showPaidPlans = noSubscription || onActiveTrial || onExpiredTrial || onCancelledOrExpiredPaid || onActiveWeekly;
   // Show manage if on active paid plan
   const showManage = onActivePaid;
+
+  const handleBack = () => onNavigate?.('dashboard');
 
   return (
     <View style={styles.container}>
@@ -324,31 +360,70 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
           )}
           scrollEventThrottle={16}
         >
-          {/* Subscription Status Summary */}
-          {loadingStatus ? (
-            <Text style={{ textAlign: 'center', marginVertical: 16 }}>Loading subscription status...</Text>
-          ) : subscriptionStatus && subscriptionStatus.hasSubscription ? (
-            <>
-              {subscriptionStatus && subscriptionStatus.planType !== 'trial' && (
-                <Card style={{ marginBottom: 16, backgroundColor: 'rgba(99,102,241,0.08)' }}>
-                  <View style={{ padding: 16 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
-                      {subscriptionStatus.planType === 'weekly'
-                        ? 'You are on the weekly plan'
-                        : subscriptionStatus.planType === 'monthly'
-                        ? 'You are on the monthly plan'
-                        : 'You are on the yearly plan'}
-                    </Text>
-                    {subscriptionStatus.status === 'active' && subscriptionStatus.next_billing_date && (
-                      <Text style={{ fontSize: 14 }}>
-                        Next billing: {new Date(subscriptionStatus.next_billing_date).toLocaleDateString()}
-                      </Text>
-                    )}
-                  </View>
-                </Card>
+          {/* Current Plan Card */}
+          {subscriptionStatus && subscriptionStatus.hasSubscription && (
+            <Card style={{ marginBottom: 24, backgroundColor: '#F6F8FF', borderRadius: 16, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.primary[700], marginBottom: 6 }}>Current Plan</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.neutral[900], marginBottom: 2 }}>
+                {subscriptionStatus.planType === 'trial' ? 'Free Trial' : subscriptionStatus.planType?.charAt(0).toUpperCase() + subscriptionStatus.planType?.slice(1) + ' Plan'}
+              </Text>
+              {subscriptionStatus.status === 'active' && subscriptionStatus.planType === 'trial' && (
+                <Text style={{ color: theme.colors.success[600], marginBottom: 4 }}>
+                  {subscriptionStatus.trialDaysLeft} days left in your free trial
+                </Text>
               )}
-            </>
-          ) : null}
+              {subscriptionStatus.status === 'active' && subscriptionStatus.planType !== 'trial' && subscriptionStatus.nextBillingDate && (
+                <Text style={{ color: theme.colors.success[600], marginBottom: 4 }}>
+                  Next billing: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
+                </Text>
+              )}
+              {subscriptionStatus.status === 'cancelled' && (
+                <Text style={{ color: theme.colors.error[600], marginBottom: 4 }}>
+                  Your subscription is cancelled. You can re-subscribe below.
+                </Text>
+              )}
+              {subscriptionStatus.status === 'expired' && (
+                <Text style={{ color: theme.colors.error[600], marginBottom: 4 }}>
+                  Your subscription has expired. Please choose a new plan below.
+                </Text>
+              )}
+              <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                {subscriptionStatus.status === 'active' && subscriptionStatus.planType !== 'trial' && (
+                  <Button
+                    title="Cancel Subscription"
+                    variant="secondary"
+                    style={{ marginRight: 12, opacity: continueLoading ? 0.5 : 1 }}
+                    onPress={handleCancelSubscription}
+                    disabled={continueLoading}
+                  />
+                )}
+                {subscriptionStatus.status === 'active' && (
+                  <Button
+                    title="Change Plan"
+                    variant="primary"
+                    style={{ opacity: continueLoading ? 0.5 : 1 }}
+                    onPress={handleChangePlan}
+                    disabled={continueLoading}
+                  />
+                )}
+                {(subscriptionStatus.status === 'cancelled' || subscriptionStatus.status === 'expired') && (
+                  <Button
+                    title="Change Plan"
+                    variant="primary"
+                    onPress={handleChangePlan}
+                  />
+                )}
+                {subscriptionStatus.status === 'active' && (
+                  <Button
+                    title="Manage Subscription"
+                    variant="primary"
+                    style={{ marginLeft: 12 }}
+                    onPress={() => setShowManageModal(true)}
+                  />
+                )}
+              </View>
+            </Card>
+          )}
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity 
@@ -391,15 +466,17 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
               <View style={styles.plansSection}>
                 <Text style={responsiveStyles.sectionTitle}>Choose Your Plan</Text>
                 <View style={styles.plansContainer}>
-                  {plans.filter(plan => showTrialOption || plan.id !== 'trial').map((plan) => (
+                  {filteredPlans.map((plan) => (
                     <TouchableOpacity
                       key={plan.id}
                       style={[
                         styles.planCard,
                         selectedPlanId === plan.id && styles.planCardSelected,
-                        plan.popular && styles.planCardPopular
+                        plan.popular && styles.planCardPopular,
+                        highlightPlans && { borderColor: theme.colors.primary[500], borderWidth: 3 },
                       ]}
                       onPress={() => handlePlanSelect(plan.id)}
+                      disabled={continueLoading} // Prevent double-tap during loading
                     >
                       {plan.badge && (
                         <View style={[
@@ -445,16 +522,6 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
 
           {/* Action Section */}
           <View style={styles.actionSection}>
-            {showPaidPlans && (
-              <Button
-                title={showTrialOption && selectedPlan === 'trial' ? 'Start Free Trial' : (selectedPlan === 'monthly' ? 'Subscribe Monthly' : selectedPlan === 'yearly' ? 'Subscribe Yearly' : 'Subscribe')}
-                variant="primary"
-                size="lg"
-                onPress={handleContinue}
-                style={continueLoading ? { ...styles.primaryButton, ...styles.primaryButtonDisabled } : styles.primaryButton}
-                disabled={showTrialOption && selectedPlan === 'trial' && onActiveTrial || continueLoading}
-              />
-            )}
             {continueLoading && (
               <ActivityIndicator size="small" color={theme.colors.primary[500]} style={{ marginTop: 8 }} />
             )}
@@ -475,14 +542,14 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 You are currently on a Free Trial. {subscriptionStatus.trialDaysLeft} days left.
               </Text>
             )}
-            {onActivePaid && (
+            {onActivePaid && subscriptionStatus.nextBillingDate && (
               <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
-                You are subscribed to the {subscriptionStatus.planType} plan. Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
+                You are subscribed to the {subscriptionStatus.planType} plan. Next billing: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
               </Text>
             )}
             {onActiveWeekly && (
               <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
-                You are subscribed to the weekly plan. Next billing: {subscriptionStatus.next_billing_date ? new Date(subscriptionStatus.next_billing_date).toLocaleDateString() : 'N/A'}
+                You are subscribed to the weekly plan. Next billing: {subscriptionStatus.nextBillingDate ? new Date(subscriptionStatus.nextBillingDate).toLocaleDateString() : 'N/A'}
               </Text>
             )}
             {onCancelledOrExpiredPaid && (
@@ -495,7 +562,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 Your trial has expired.
               </Text>
             )}
-            <TouchableOpacity style={styles.skipButton} onPress={() => setShowSkipModal(true)}>
+            <TouchableOpacity style={styles.skipButton} onPress={handleMaybeLater}>
               <Text style={responsiveStyles.skipButtonText}>Maybe later</Text>
             </TouchableOpacity>
             <Text style={responsiveStyles.disclaimerText}>
@@ -511,22 +578,49 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
           showThreshold={150}
         />
       </SafeAreaView>
+      {/* Confirmation Modal */}
       <Modal
-        visible={showSkipModal}
+        visible={showConfirmModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowSkipModal(false)}
+        onRequestClose={() => setShowConfirmModal(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 24, width: 320, alignItems: 'center' }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12 }}>Skip Subscription?</Text>
-            <Text style={{ fontSize: 15, color: theme.colors.neutral[700], textAlign: 'center', marginBottom: 24 }}>
-              Some features may be limited until you subscribe. You can always subscribe later from Settings.
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              <Button title="Cancel" variant="ghost" onPress={() => setShowSkipModal(false)} style={{ flex: 1 }} />
-              <Button title="Continue" variant="primary" onPress={() => { setShowSkipModal(false); onNavigate?.('dashboard'); }} style={{ flex: 1 }} />
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 28, width: '85%', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Confirm Plan</Text>
+            {planToConfirm && (
+              <>
+                <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>{planToConfirm.name}</Text>
+                <Text style={{ fontSize: 16, color: theme.colors.primary[600], marginBottom: 8 }}>{planToConfirm.price} {planToConfirm.period}</Text>
+                {planToConfirm.features.map((feature, idx) => (
+                  <Text key={idx} style={{ fontSize: 15, color: theme.colors.neutral[700], marginBottom: 2 }}>✓ {feature}</Text>
+                ))}
+              </>
+            )}
+            <View style={{ flexDirection: 'row', marginTop: 18 }}>
+              <Button title="Cancel" variant="secondary" style={{ marginRight: 12 }} onPress={() => setShowConfirmModal(false)} />
+              <Button title="Confirm" variant="primary" loading={continueLoading} onPress={handleConfirmPlan} />
             </View>
+            {continueError && <Text style={{ color: theme.colors.error[600], marginTop: 10 }}>{continueError}</Text>}
+          </View>
+        </View>
+      </Modal>
+      {/* Manage Subscription Modal */}
+      <Modal
+        visible={showManageModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowManageModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 28, width: '85%', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Manage Subscription</Text>
+            <Text style={{ fontSize: 16, marginBottom: 8 }}>Current Plan: {subscriptionStatus?.planType}</Text>
+            <Text style={{ fontSize: 16, marginBottom: 8 }}>Status: {subscriptionStatus?.status}</Text>
+            {subscriptionStatus?.next_billing_date && (
+              <Text style={{ fontSize: 16, marginBottom: 8 }}>Next Billing: {new Date(subscriptionStatus.next_billing_date).toLocaleDateString()}</Text>
+            )}
+            <Button title="Close" variant="primary" onPress={() => setShowManageModal(false)} />
           </View>
         </View>
       </Modal>

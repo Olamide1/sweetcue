@@ -132,9 +132,32 @@ class SubscriptionService {
   }
 
   /**
+   * Add a helper to check if user has ever had a trial
+   */
+  async hasEverHadTrial(): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('plan_type', 'trial')
+        .limit(1);
+      return !!(data && data.length > 0);
+    } catch (error) {
+      console.error('Check ever had trial error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Start a trial subscription
    */
   async startTrial(): Promise<SubscriptionResponse> {
+    if (await this.hasEverHadTrial()) {
+      return { data: null, error: 'You have already used your free trial.' };
+    }
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 days from now
 
@@ -229,7 +252,10 @@ class SubscriptionService {
   /**
    * Upgrade to paid plan (placeholder for Stripe integration)
    */
-  async upgradeToPaidPlan(planType: 'weekly' | 'monthly' | 'yearly', stripeCustomerId?: string, stripeSubscriptionId?: string): Promise<SubscriptionResponse> {
+  async upgradeToPaidPlan(planType: 'weekly' | 'monthly' | 'yearly' | 'trial', stripeCustomerId?: string, stripeSubscriptionId?: string): Promise<SubscriptionResponse> {
+    if (planType === 'trial' && await this.hasEverHadTrial()) {
+      return { data: null, error: 'You have already used your free trial.' };
+    }
     try {
       const nextBillingDate = new Date();
       if (planType === 'weekly') {
@@ -278,6 +304,7 @@ class SubscriptionService {
     status: SubscriptionStatus | null;
     trialDaysLeft: number;
     isTrialExpired: boolean;
+    nextBillingDate: string | null;
   }> {
     try {
       const { data } = await this.getSubscription();
@@ -290,6 +317,7 @@ class SubscriptionService {
           status: null,
           trialDaysLeft: 0,
           isTrialExpired: false,
+          nextBillingDate: null,
         };
       }
 
@@ -304,6 +332,7 @@ class SubscriptionService {
         status: data.status,
         trialDaysLeft,
         isTrialExpired,
+        nextBillingDate: data.next_billing_date || null,
       };
     } catch (error) {
       console.error('Get subscription status error:', error);
@@ -314,6 +343,7 @@ class SubscriptionService {
         status: null,
         trialDaysLeft: 0,
         isTrialExpired: false,
+        nextBillingDate: null,
       };
     }
   }
