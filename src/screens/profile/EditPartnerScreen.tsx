@@ -28,7 +28,7 @@ interface PartnerProfile {
     anniversary?: string;
     birthday?: string;
   };
-  loveLanguage: string;
+  loveLanguages: string[];
   dislikes: string;
 }
 
@@ -44,11 +44,16 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
   initialProfile = {
     name: 'Alex',
     keyDates: { birthday: '03/15/1990', anniversary: '06/20/2020' },
-    loveLanguage: 'Quality Time',
+    loveLanguages: ['Quality Time'],
     dislikes: 'Surprise parties, overly expensive gifts'
   }
 }) => {
-  const [profile, setProfile] = useState<PartnerProfile>(initialProfile);
+  const [profile, setProfile] = useState<PartnerProfile>({
+    name: initialProfile.name,
+    keyDates: initialProfile.keyDates,
+    loveLanguages: initialProfile.loveLanguages || [],
+    dislikes: initialProfile.dislikes,
+  });
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +75,14 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
             birthday: data.birthday ? String(data.birthday) : '',
             anniversary: data.anniversary ? String(data.anniversary) : '',
           },
-          loveLanguage: data.love_language || '',
+          loveLanguages: data.love_languages || (data.love_language ? [data.love_language] : []),
           dislikes: data.dislikes || '',
         });
         console.log('[EditPartnerScreen] Processed partner profile:', {
           name: data.name,
           birthday: data.birthday,
           anniversary: data.anniversary,
-          love_language: data.love_language
+          love_languages: data.love_languages
         });
       }
       if (error) {
@@ -168,8 +173,16 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
   const handleInputChange = (field: keyof PartnerProfile | string, value: string) => {
     setHasChanges(true);
     
-    if (field === 'name' || field === 'loveLanguage' || field === 'dislikes') {
+    if (field === 'name' || field === 'dislikes') {
       setProfile(prev => ({ ...prev, [field]: value }));
+    } else if (field === 'loveLanguages') {
+      setProfile(prev => {
+        const currentLoveLanguages = prev.loveLanguages || [];
+        const newLoveLanguages = currentLoveLanguages.includes(value)
+          ? currentLoveLanguages.filter(l => l !== value)
+          : [...currentLoveLanguages, value];
+        return { ...prev, loveLanguages: newLoveLanguages };
+      });
     } else if (field === 'birthday' || field === 'anniversary') {
       setProfile(prev => ({
         ...prev,
@@ -192,7 +205,7 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
       name: profile.name,
       birthday: profile.keyDates.birthday,
       anniversary: profile.keyDates.anniversary,
-      loveLanguage: profile.loveLanguage,
+      loveLanguages: profile.loveLanguages,
       dislikes: profile.dislikes,
     };
     console.log('[EditPartnerScreen] Save data to be sent:', saveData);
@@ -331,13 +344,13 @@ const EditPartnerScreen: React.FC<EditPartnerScreenProps> = ({
                     key={index}
                     style={[
                       responsiveStyles.loveLanguageOption,
-                      profile.loveLanguage === language && responsiveStyles.loveLanguageSelected
+                      (profile.loveLanguages || []).includes(language) && responsiveStyles.loveLanguageSelected
                     ]}
-                    onPress={() => handleInputChange('loveLanguage', language)}
+                    onPress={() => handleInputChange('loveLanguages', language)}
                   >
                     <Text style={[
                       responsiveStyles.loveLanguageText,
-                      profile.loveLanguage === language && responsiveStyles.loveLanguageTextSelected
+                      (profile.loveLanguages || []).includes(language) && responsiveStyles.loveLanguageTextSelected
                     ]}>
                       {language}
                     </Text>

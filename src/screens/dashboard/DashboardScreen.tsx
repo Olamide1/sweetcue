@@ -156,7 +156,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // const [messageForm, setMessageForm] = useState({ message: '', scheduled_date: '' });
   // const [messageSaving, setMessageSaving] = useState(false);
   // const [messageError, setMessageError] = useState<string | null>(null);
-  const loveLanguage = partnerProfile?.love_language || '';
+  const loveLanguage = partnerProfile?.love_languages?.[0] || '';
+  const allLoveLanguages = partnerProfile?.love_languages || [];
   // const [accountDeleted, setAccountDeleted] = useState(false);
   // Remove showDatePicker modal logic and use inline state
   // const [showDatePicker, setShowDatePicker] = useState(false);
@@ -382,9 +383,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const availableGestures = fallbackGestures; // Removed gestureTemplates.length > 0 ? gestureTemplates : fallbackGestures;
 
   // Filter gestures for love language recommendations
-  const recommendedGestures = availableGestures.filter(g =>
-    loveLanguage && g.category && g.category.toLowerCase().includes(loveLanguage.toLowerCase().replace(/ /g, '_'))
-  );
+  const recommendedGestures = availableGestures.filter(g => {
+    if (!allLoveLanguages.length || !g.category) return false;
+    return allLoveLanguages.some((loveLang: string) => 
+      g.category.toLowerCase().includes(loveLang.toLowerCase().replace(/ /g, '_'))
+    );
+  });
   const otherGestures = availableGestures.filter(g => !recommendedGestures.includes(g));
   // const searchedGestures = gestureSearch
   //   ? availableGestures.filter(g =>
@@ -724,7 +728,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} style={{ marginRight: 10 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.neutral[900] }}>{partnerProfile?.name || partnerName}</Text>
-                      <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>{partnerProfile?.loveLanguage ? `Love Language: ${partnerProfile.loveLanguage}` : ''}</Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 1 }}>
+                        {allLoveLanguages.length > 0 
+                          ? `Love Languages: ${allLoveLanguages.join(', ')}` 
+                          : ''
+                        }
+                      </Text>
                     </View>
                   </View>
                   {/* Edit Profile */}

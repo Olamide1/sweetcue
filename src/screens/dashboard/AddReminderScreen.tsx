@@ -24,7 +24,7 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
   const [loading, setLoading] = useState(false);
   const [gestureLoading, setGestureLoading] = useState(false);
   const [partnerProfile, setPartnerProfile] = useState<any>(null);
-  const [loveLanguage, setLoveLanguage] = useState('');
+  const [loveLanguages, setLoveLanguages] = useState<string[]>([]);
   const [showDateModal, setShowDateModal] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(scheduledDate);
 
@@ -43,7 +43,7 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
       const { data: partner, error: partnerError } = await partnerService.getPartner();
       if (partner) {
         setPartnerProfile(partner);
-        setLoveLanguage(partner.love_language || '');
+        setLoveLanguages(partner.love_languages || []);
       }
 
       // Load gesture templates
@@ -99,8 +99,8 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
           console.log('[AddReminderScreen] Creating custom gesture...');
           
           // Determine category based on partner's love language
-          const category = loveLanguage 
-            ? loveLanguage.toLowerCase().replace(/ /g, '_')
+          const category = loveLanguages.length > 0 
+            ? loveLanguages[0].toLowerCase().replace(/ /g, '_') // Assuming the first love language is the primary
             : 'romance';
           
           const customGestureData = {
@@ -174,9 +174,9 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
 
   // Filter gestures for love language recommendations
   const recommendedGestures = availableGestures.filter(g => {
-    if (!loveLanguage) return false;
+    if (loveLanguages.length === 0) return false;
     const category = g.category?.toLowerCase() || '';
-    const loveLang = loveLanguage.toLowerCase();
+    const loveLang = loveLanguages[0].toLowerCase(); // Assuming the first love language is the primary
     
     return (
       (loveLang.includes('words') && category.includes('words')) ||
@@ -238,9 +238,9 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
               </View>
             ) : (
               <>
-                {loveLanguage && recommendedGestures.length > 0 && (
+                {loveLanguages.length > 0 && recommendedGestures.length > 0 && (
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Recommended for {loveLanguage}:</Text>
+                    <Text style={styles.sectionTitle}>Recommended for {loveLanguages[0]}:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gestureScroll}>
                       {recommendedGestures.map((g) => (
                         <TouchableOpacity

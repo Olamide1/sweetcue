@@ -9,7 +9,7 @@ export interface PartnerProfileData {
   name: string;
   birthday?: string;
   anniversary?: string;
-  loveLanguage: string;
+  loveLanguages: string[];
   dislikes: string;
 }
 
@@ -28,7 +28,7 @@ class PartnerService {
         name: profile.name,
         birthday: profile.birthday || null,
         anniversary: profile.anniversary || null,
-        love_language: profile.loveLanguage, // map camelCase to snake_case
+        love_languages: profile.loveLanguages, // map camelCase to snake_case
         dislikes: profile.dislikes,
       };
       const { data, error } = await supabase
@@ -37,8 +37,8 @@ class PartnerService {
         .select()
         .single();
       if (error) return { data: null, error: error.message };
-      // Map love_language to loveLanguage in the returned data
-      if (data) data.loveLanguage = data.love_language;
+      // Map love_languages to loveLanguages in the returned data
+      if (data) data.loveLanguages = data.love_languages || [];
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };
@@ -57,8 +57,8 @@ class PartnerService {
         .limit(1)
         .single();
       if (error) return { data: null, error: error.message };
-      // Map love_language to loveLanguage in the returned data
-      if (data) data.loveLanguage = data.love_language;
+      // Map love_languages to loveLanguages in the returned data
+      if (data) data.loveLanguages = data.love_languages || [];
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };
@@ -69,12 +69,12 @@ class PartnerService {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { data: null, error: 'User not authenticated' };
-      // Map loveLanguage to love_language for update
+      // Map loveLanguages to love_languages for update
       const updateData: PartnerUpdate = {
         ...profile,
-        ...(profile.loveLanguage !== undefined ? { love_language: profile.loveLanguage } : {}),
+        ...(profile.loveLanguages !== undefined ? { love_languages: profile.loveLanguages } : {}),
       };
-      delete updateData.loveLanguage;
+      delete updateData.loveLanguages;
       const { data, error } = await supabase
         .from('partners')
         .update(updateData)
@@ -83,8 +83,8 @@ class PartnerService {
         .select()
         .single();
       if (error) return { data: null, error: error.message };
-      // Map love_language to loveLanguage in the returned data
-      if (data) data.loveLanguage = data.love_language;
+      // Map love_languages to loveLanguages in the returned data
+      if (data) data.loveLanguages = data.love_languages || [];
       return { data, error: null };
     } catch (error) {
       return { data: null, error: 'Unexpected error' };

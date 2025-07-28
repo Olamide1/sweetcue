@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.partners (
   photo_url TEXT,
   birthday DATE,
   anniversary DATE,
-  love_language TEXT,
+  love_languages TEXT[] DEFAULT '{}',
   dislikes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -26,7 +26,7 @@ interface PartnerProfile {
     anniversary?: string;
     birthday?: string;
   };
-  loveLanguage: string;
+  loveLanguages: string[];
   dislikes: string;
   userEmail: string;
   userPassword: string;
@@ -49,7 +49,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
   const [profile, setProfile] = useState<PartnerProfile>({
     name: '',
     keyDates: {},
-    loveLanguage: '',
+    loveLanguages: [],
     dislikes: '',
     userEmail: '',
     userPassword: '',
@@ -73,7 +73,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
             birthday: data.birthday || '',
             anniversary: data.anniversary || '',
           },
-          loveLanguage: data.love_language || '',
+          loveLanguages: data.love_languages || [],
           dislikes: data.dislikes || '',
         }));
       }
@@ -150,8 +150,8 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
       Alert.alert('Required', 'Please enter your partner\'s name');
       return;
     }
-    if (currentStep === 3 && !profile.loveLanguage.trim()) {
-      Alert.alert('Required', 'Please select a love language');
+    if (currentStep === 3 && profile.loveLanguages.length === 0) {
+      Alert.alert('Required', 'Please select at least one love language');
       return;
     }
     if (currentStep === 5) {
@@ -220,7 +220,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
         name: profile.name,
         birthday: profile.keyDates.birthday || undefined,
         anniversary: profile.keyDates.anniversary || undefined,
-        loveLanguage: profile.loveLanguage,
+        loveLanguages: profile.loveLanguages,
         dislikes: profile.dislikes,
       };
       const { data, error: partnerError } = await partnerService.createPartner(partnerPayload);
@@ -246,7 +246,7 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
     const stepConfig = {
       1: { emoji: '💕', title: "What's your partner's name?", subtitle: "Let's personalize your experience" },
       2: { emoji: '📅', title: 'Important dates', subtitle: "We'll remind you when they matter most" },
-      3: { emoji: '💝', title: 'How do they feel loved?', subtitle: 'Choose their primary love language' },
+      3: { emoji: '💝', title: 'How do they feel loved?', subtitle: 'Select all that apply - most people have multiple love languages' },
       4: { emoji: '⚠️', title: 'Anything to avoid?', subtitle: 'Help us give better suggestions' },
       5: { emoji: '🔐', title: 'Create your account', subtitle: "We'll use this to save your preferences" },
     }[currentStep] || { emoji: '💕', title: 'Setup', subtitle: 'Getting started' };
@@ -296,18 +296,32 @@ const PartnerProfileScreen: React.FC<PartnerProfileScreenProps> = ({ onNavigate,
 
         {currentStep === 3 && (
           <View style={styles.loveLanguagesContainer}>
+            <Text style={styles.helperText}>
+              💡 Most people have 2-3 primary love languages. The more you select, the better we can personalize your experience.
+            </Text>
+            <Text style={styles.selectedCount}>
+              {profile.loveLanguages.length} selected
+            </Text>
             {loveLanguages.map((language, index) => (
               <TouchableOpacity
                 key={index}
                 style={[
                   styles.loveLanguageOption,
-                  profile.loveLanguage === language && styles.loveLanguageSelected
+                  (profile.loveLanguages || []).includes(language) && styles.loveLanguageSelected
                 ]}
-                onPress={() => setProfile(prev => ({ ...prev, loveLanguage: language }))}
+                onPress={() => {
+                  setProfile(prev => {
+                    const currentLoveLanguages = prev.loveLanguages || [];
+                    const newLoveLanguages = currentLoveLanguages.includes(language)
+                      ? currentLoveLanguages.filter(l => l !== language)
+                      : [...currentLoveLanguages, language];
+                    return { ...prev, loveLanguages: newLoveLanguages };
+                  });
+                }}
               >
                 <Text style={[
                   responsiveStyles.loveLanguageText,
-                  profile.loveLanguage === language && responsiveStyles.loveLanguageTextSelected
+                  (profile.loveLanguages || []).includes(language) && responsiveStyles.loveLanguageTextSelected
                 ]}>
                   {language}
                 </Text>
@@ -600,6 +614,19 @@ const styles = StyleSheet.create({
   loveLanguageTextSelected: {
     color: '#6366F1',
     fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 14,
+    color: theme.colors.neutral[600],
+    textAlign: 'center',
+    marginBottom: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+  },
+  selectedCount: {
+    fontSize: 14,
+    color: theme.colors.neutral[600],
+    textAlign: 'center',
+    marginBottom: theme.spacing[3],
   },
 
   // Action Section
