@@ -175,7 +175,18 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     if (data) {
       const now = new Date();
       const completedThisWeek = data.filter((r: any) => r.is_completed && isThisWeek(parseISO(r.scheduled_date)));
-      const missedThisWeek = data.filter((r: any) => !r.is_completed && isThisWeek(parseISO(r.scheduled_date)) && new Date(r.scheduled_date) < now);
+      // Compare dates only, not times - a reminder is missed if the date has passed
+      const today = new Date();
+      const todayStartOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      const missedThisWeek = data.filter((r: any) => {
+        if (r.is_completed || !isThisWeek(parseISO(r.scheduled_date))) return false;
+        
+        const scheduledDate = new Date(r.scheduled_date);
+        const scheduledStartOfDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+        
+        return scheduledStartOfDay < todayStartOfDay; // Only missed if the date has passed
+      });
       setStreak(completedThisWeek.length);
       setWeekProgress({
         completed: completedThisWeek.length,
@@ -703,15 +714,45 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.success[600] }}>{streak}-day streak</Text>
               </View>
             </View>
-            <Pressable
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 18, backgroundColor: theme.colors.primary[50], marginLeft: 8 }}
-              onPress={() => setShowProfileMenu(true)}
-              accessibilityLabel="Open Profile Menu"
-              accessibilityRole="button"
-            >
-              <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} />
-              <MaterialIcons name="expand-more" size={24} color={theme.colors.primary[400]} style={{ marginLeft: 4 }} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {/* Recent Activity Button */}
+              <TouchableOpacity
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  paddingVertical: 6, 
+                  paddingHorizontal: 12, 
+                  borderRadius: 16, 
+                  backgroundColor: theme.colors.neutral[100],
+                  borderWidth: 1,
+                  borderColor: theme.colors.neutral[200]
+                }}
+                onPress={() => onNavigate?.('recentActivity')}
+                accessibilityLabel="View Recent Activity"
+                accessibilityRole="button"
+              >
+                <MaterialIcons name="history" size={20} color={theme.colors.neutral[600]} />
+                <Text style={{ 
+                  fontSize: 14, 
+                  fontWeight: '600', 
+                  color: theme.colors.neutral[700], 
+                  marginLeft: 4 
+                }}>
+                  Activity
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Profile Menu Button */}
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 18, backgroundColor: theme.colors.primary[50] }}
+                onPress={() => setShowProfileMenu(true)}
+                accessibilityLabel="Open Profile Menu"
+                accessibilityRole="button"
+              >
+                <MaterialIcons name="person" size={32} color={theme.colors.primary[400]} />
+                <MaterialIcons name="expand-more" size={24} color={theme.colors.primary[400]} style={{ marginLeft: 4 }} />
+              </Pressable>
+            </View>
           </View>
           {/* Profile Dropdown Modal (top right, elegant, correct order) */}
           {showProfileMenu && (
@@ -810,7 +851,50 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.primary[700], marginBottom: 8 }}>This Week's Progress</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <Text style={{ fontSize: 16, color: theme.colors.success[600], fontWeight: '600', marginRight: 12 }}>✔️ {weekProgress.completed} Completed</Text>
-              <Text style={{ fontSize: 16, color: theme.colors.error[600], fontWeight: '600' }}>❌ {weekProgress.missed} Missed</Text>
+              <TouchableOpacity 
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  backgroundColor: weekProgress.missed > 0 ? theme.colors.error[50] : 'transparent',
+                  borderRadius: 8,
+                  paddingHorizontal: weekProgress.missed > 0 ? 8 : 0,
+                  paddingVertical: weekProgress.missed > 0 ? 4 : 0,
+                }}
+                onPress={() => {
+                  if (weekProgress.missed > 0) {
+                    Alert.alert(
+                      'View Missed Activities',
+                      `You have ${weekProgress.missed} missed reminder${weekProgress.missed > 1 ? 's' : ''} this week. Tap to view and manage them in Recent Activities.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'View Activities', 
+                          onPress: () => onNavigate?.('recentActivity'),
+                          style: 'default'
+                        }
+                      ]
+                    );
+                  }
+                }}
+                disabled={weekProgress.missed === 0}
+              >
+                <Text style={{ 
+                  fontSize: 16, 
+                  color: theme.colors.error[600], 
+                  fontWeight: '600',
+                  textDecorationLine: weekProgress.missed > 0 ? 'underline' : 'none'
+                }}>
+                  ❌ {weekProgress.missed} Missed
+                </Text>
+                {weekProgress.missed > 0 && (
+                  <MaterialIcons 
+                    name="arrow-forward-ios" 
+                    size={14} 
+                    color={theme.colors.error[600]} 
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
+              </TouchableOpacity>
             </View>
             {/* Progress Bar */}
             <View style={{ height: 10, borderRadius: 6, backgroundColor: theme.colors.neutral[200], overflow: 'hidden', marginTop: 4 }}>
@@ -821,9 +905,32 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 borderRadius: 6,
               }} />
             </View>
-            <Text style={{ fontSize: 13, color: theme.colors.neutral[500], marginTop: 6 }}>
-              {weekProgress.total === 0 ? 'No reminders completed or missed this week yet.' : `${weekProgress.completed + weekProgress.missed} total reminders this week`}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+              <Text style={{ fontSize: 13, color: theme.colors.neutral[500] }}>
+                {weekProgress.total === 0 ? 'No reminders completed or missed this week yet.' : `${weekProgress.completed + weekProgress.missed} total reminders this week`}
+              </Text>
+              <TouchableOpacity
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center',
+                  backgroundColor: theme.colors.primary[50],
+                  borderRadius: 8,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                }}
+                onPress={() => onNavigate?.('recentActivity')}
+              >
+                <MaterialIcons name="history" size={14} color={theme.colors.primary[600]} />
+                <Text style={{ 
+                  fontSize: 12, 
+                  fontWeight: '600', 
+                  color: theme.colors.primary[600], 
+                  marginLeft: 4 
+                }}>
+                  View All
+                </Text>
+              </TouchableOpacity>
+            </View>
           </Card>
           {/* First-time user hint */}
           {reminders.length === 0 && !remindersLoading && (

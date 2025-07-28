@@ -43,11 +43,26 @@ const RecentActivityScreen: React.FC<RecentActivityScreenProps> = ({ onNavigate 
     const { data } = await reminderService.getReminders();
     if (data) {
       const now = new Date();
+      const todayStartOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
       const completedReminders = data.filter((r: any) => r.is_completed);
-      const missedReminders = data.filter((r: any) => !r.is_completed && new Date(r.scheduled_date) < now);
+      
+      // Compare dates only, not times - a reminder is missed if the date has passed
+      const missedReminders = data.filter((r: any) => {
+        if (r.is_completed) return false;
+        
+        const scheduledDate = new Date(r.scheduled_date);
+        const scheduledStartOfDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+        
+        return scheduledStartOfDay < todayStartOfDay; // Only missed if the date has passed
+      });
+      
       setCompleted(completedReminders);
       setMissed(missedReminders);
-      setSummary({ completed: completedReminders.filter((r: any) => isThisWeek(parseISO(r.scheduled_date))).length, missed: missedReminders.filter((r: any) => isThisWeek(parseISO(r.scheduled_date))).length });
+      setSummary({ 
+        completed: completedReminders.filter((r: any) => isThisWeek(parseISO(r.scheduled_date))).length, 
+        missed: missedReminders.filter((r: any) => isThisWeek(parseISO(r.scheduled_date))).length 
+      });
     }
     setLoading(false);
   };
@@ -129,7 +144,12 @@ const RecentActivityScreen: React.FC<RecentActivityScreenProps> = ({ onNavigate 
           )}
           <Text style={styles.header}>Recent Activity</Text>
         </View>
-        <Text style={styles.summary}>{`You completed ${summary.completed} gestures this week! ${summary.missed} reminders were missed.`}</Text>
+        <Text style={styles.summary}>
+          {summary.missed > 0 
+            ? `You completed ${summary.completed} gestures this week. You have ${summary.missed} missed reminder${summary.missed > 1 ? 's' : ''} to catch up on.`
+            : `You completed ${summary.completed} gestures this week! Great job staying on top of your reminders.`
+          }
+        </Text>
         {renderSection('Missed This Week', missedGroups.thisWeek, 'error-outline', theme.colors.error[600], true)}
         {renderSection('Completed This Week', completedGroups.thisWeek, 'check-circle', theme.colors.success[600])}
         {renderSection('Missed Last Week', missedGroups.lastWeek, 'error-outline', theme.colors.error[500], true)}
