@@ -145,6 +145,17 @@ const newLoveLanguages = currentLoveLanguages.includes(value)
 - Backward compatibility with existing data
 - Safe array operations throughout the app
 
+## 🐛 **Reminder Display Fix**
+
+### **Today's Activities Not Showing in "Next 3 Days"**
+- **Issue**: Reminders created for today weren't appearing in the "Next 3 days" view
+- **Root Cause**: Date comparison mismatch between reminder creation (YYYY-MM-DD) and fetching (ISO with time)
+- **Fix**: Updated `getUpcomingReminders` to use consistent YYYY-MM-DD format for date comparisons
+- **Additional Fix**: Removed `Math.max(0, daysUntil)` to allow `daysUntil = 0` for today's reminders
+
+### **Files Modified**:
+- **reminders.ts**: Fixed date comparison logic in `getUpcomingReminders` and `getUpcomingRemindersSummary`
+
 ## 🚀 **Next Steps**
 
 1. **Run Migration**: Execute `migrate-love-languages.sql` in Supabase

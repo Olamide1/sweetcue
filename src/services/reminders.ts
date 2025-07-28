@@ -121,10 +121,14 @@ class ReminderService {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + days);
 
+      // Format dates as YYYY-MM-DD to match the stored format
+      const todayStr = now.toISOString().split('T')[0];
+      const futureStr = futureDate.toISOString().split('T')[0];
+
       console.log('[ReminderService] Getting upcoming reminders:', {
         userId: user.id,
-        now: now.toISOString(),
-        futureDate: futureDate.toISOString(),
+        today: todayStr,
+        futureDate: futureStr,
         days
       });
 
@@ -133,8 +137,8 @@ class ReminderService {
         .select('*')
         .eq('user_id', user.id)
         .eq('is_completed', false)
-        .gte('scheduled_date', now.toISOString())
-        .lte('scheduled_date', futureDate.toISOString())
+        .gte('scheduled_date', todayStr)
+        .lte('scheduled_date', futureStr)
         .order('scheduled_date', { ascending: true });
 
       if (error) {
@@ -303,7 +307,7 @@ class ReminderService {
             title: reminder.title,
             description: reminder.description || undefined,
             scheduled_date: reminder.scheduled_date,
-            daysUntil: Math.max(0, daysUntil),
+            daysUntil: daysUntil, // Don't use Math.max(0, daysUntil) - allow 0 for today
             isUrgent: daysUntil <= 2,
             type: 'reminder',
             emoji: this.getEmojiForReminder(reminder.title),
