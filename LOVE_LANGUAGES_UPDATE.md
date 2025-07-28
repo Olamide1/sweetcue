@@ -152,6 +152,22 @@ const newLoveLanguages = currentLoveLanguages.includes(value)
 3. **Validate Recommendations**: Ensure gesture filtering works with multiple languages
 4. **Monitor Usage**: Track how users utilize the new feature
 
+## 🔧 **Navigation & Subscription Flow Improvements**
+
+### **"Maybe later" Button Removal**
+- **Issue**: "Maybe later" button allowed users to skip subscription entirely
+- **Solution**: Removed "Maybe later" button to force users to make a subscription choice
+- **Updated Copy**: Changed disclaimer to "Choose a plan to continue. You can manage your subscription anytime from Settings."
+
+### **Auto-Trial Creation**
+- **New Behavior**: When users complete onboarding, automatically create a trial subscription
+- **User Experience**: Users go directly to dashboard with active trial, see upgrade prompts
+- **Business Impact**: Higher conversion rates as users start with trial instead of skipping
+
+### **Files Modified**:
+- **SubscriptionScreen.tsx**: Removed "Maybe later" button and updated copy
+- **RootNavigator.tsx**: Added auto-trial creation logic and improved navigation flow
+
 ## 📱 **User Impact**
 
 Users can now:

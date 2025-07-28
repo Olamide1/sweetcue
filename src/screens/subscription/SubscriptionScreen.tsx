@@ -304,7 +304,7 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
     );
   };
 
-  const handleMaybeLater = () => onNavigate?.('dashboard');
+
 
   const selectedPlanData = plans.find(p => p.id === selectedPlan);
   const selectedPlanId = subscriptionStatus?.planType || selectedPlan;
@@ -562,11 +562,8 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 Your trial has expired.
               </Text>
             )}
-            <TouchableOpacity style={styles.skipButton} onPress={handleMaybeLater}>
-              <Text style={responsiveStyles.skipButtonText}>Maybe later</Text>
-            </TouchableOpacity>
             <Text style={responsiveStyles.disclaimerText}>
-              You can always subscribe later from Settings.
+              Choose a plan to continue. You can manage your subscription anytime from Settings.
             </Text>
           </View>
         </ScrollView>

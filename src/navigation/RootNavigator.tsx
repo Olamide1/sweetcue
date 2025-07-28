@@ -33,7 +33,7 @@ interface UserData {
       anniversary?: string;
       birthday?: string;
     };
-    loveLanguage: string;
+    loveLanguages: string[];
     dislikes: string;
   };
 }
@@ -46,12 +46,12 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     email: '',
     partnerName: '',
     subscriptionPlan: null,
-    partnerProfile: {
-      name: '',
-      keyDates: {},
-      loveLanguage: '',
-      dislikes: '',
-    },
+          partnerProfile: {
+        name: '',
+        keyDates: {},
+        loveLanguages: [],
+        dislikes: '',
+      },
   });
   const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const [trialEndDate, setTrialEndDate] = useState<Date | undefined>(undefined);
@@ -130,7 +130,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
           partnerProfile: {
             name: '',
             keyDates: {},
-            loveLanguage: '',
+            loveLanguages: [],
             dislikes: '',
           },
         });
@@ -153,17 +153,38 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         subscriptionPlan: status.planType,
       }));
       setSubscriptionStatus(status);
+      
+      // If user has no subscription, automatically create a trial
+      if (!status.hasSubscription && !status.isActive) {
+        try {
+          const trialResult = await subscriptionService.startTrial();
+          if (!trialResult.error) {
+            // Re-fetch status after creating trial
+            const newStatus = await subscriptionService.getSubscriptionStatus();
+            setSubscriptionStatus(newStatus);
+            setUserData(prev => ({
+              ...prev,
+              subscriptionPlan: 'trial',
+            }));
+            setHasActiveSubscription(true);
+            setCurrentScreen('dashboard');
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to create trial:', error);
+        }
+      }
+      
       if (currentScreen === 'subscription') {
         // Stay on subscription page if that's where the user navigated
         return;
       }
-      // Only redirect to subscription if no valid plan or trial
-      if (
-        (!status.isActive && (!status.hasSubscription || status.isTrialExpired))
-      ) {
-        setCurrentScreen('subscription');
-      } else {
+      
+      // Navigate to dashboard if user has active subscription or trial
+      if (status.isActive || (status.hasSubscription && status.planType === 'trial' && !status.isTrialExpired)) {
         setCurrentScreen('dashboard');
+      } else {
+        setCurrentScreen('subscription');
       }
     };
     fetchSubscription();
@@ -228,7 +249,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       partnerProfile: {
         name: partnerName,
         keyDates: {},
-        loveLanguage: '',
+        loveLanguages: [],
         dislikes: '',
       },
     }));
@@ -279,7 +300,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       partnerProfile: {
         name: '',
         keyDates: {},
-        loveLanguage: '',
+        loveLanguages: [],
         dislikes: '',
       },
     });
@@ -435,14 +456,8 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       case 'recentActivity':
         return <RecentActivityScreen onNavigate={handleNavigate} />;
       case 'dashboard':
-        if (
-          isAuthenticated &&
-          hasActiveSubscription &&
-          !isTrialExpired() &&
-          subscriptionStatus &&
-          subscriptionStatus.status === 'active' &&
-          (subscriptionStatus.planType === 'weekly' || subscriptionStatus.planType === 'monthly' || subscriptionStatus.planType === 'yearly' || (subscriptionStatus.planType === 'trial' && !subscriptionStatus.isTrialExpired))
-        ) {
+        // Always show dashboard if authenticated, let dashboard handle subscription-based UI
+        if (isAuthenticated) {
           return (
             <DashboardScreen 
               partnerName={userData.partnerName}
@@ -454,7 +469,8 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
             />
           );
         }
-        return <SubscriptionScreen onNavigate={handleNavigate} onSubscriptionComplete={handleSubscriptionComplete} userEmail={userData.email} partnerName={userData.partnerName} subscriptionStatus={subscriptionStatus} />;
+        // If not authenticated, go to welcome screen
+        return <WelcomeScreen onNavigate={handleNavigate} />;
       default:
         return <WelcomeScreen onNavigate={handleNavigate} />;
     }
