@@ -117,16 +117,22 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
         timeoutPromise
       ]) as any;
       
-      setLoading(false);
-      
       if (partnerError) {
         setError(partnerError);
+        setLoading(false);
         Alert.alert('Profile Error', partnerError);
         return;
       }
       
+      // Keep loading active until navigation is complete
       // Call onAuthenticate with partner name and email
       onAuthenticate?.(partner?.name || '', email);
+      
+      // Clear loading state after a short delay to ensure smooth transition
+      setTimeout(() => {
+        setLoading(false);
+      }, 100);
+      
     } catch (err: any) {
       setError(err.message || 'Unexpected error');
       setLoading(false);

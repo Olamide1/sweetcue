@@ -250,6 +250,20 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
     }
   };
 
+  const handleSignIn = async (partnerName?: string, email?: string) => {
+    // For sign-in, we just need to set the user data and navigate
+    // The authentication is already handled by Supabase auth state change
+    setIsAuthenticated(true);
+    setUserData(prev => ({
+      ...prev,
+      partnerName: partnerName || prev.partnerName,
+      email: email || prev.email,
+    }));
+    
+    // Navigate to dashboard immediately
+    setCurrentScreen('dashboard');
+  };
+
   const handleOnboardingComplete = (partnerName: string, email: string) => {
     setIsAuthenticated(true);
     setUserData(prev => ({
@@ -413,7 +427,7 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         return (
           <SignInScreen 
             onNavigate={handleNavigate} 
-            onAuthenticate={handleAuthentication}
+            onAuthenticate={handleSignIn}
           />
         );
       case 'partnerProfile':
