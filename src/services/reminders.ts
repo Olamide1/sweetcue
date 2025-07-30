@@ -51,6 +51,25 @@ class ReminderService {
         return { data: null, error: 'User not authenticated' };
       }
 
+      // Validate that partner_id is provided
+      if (!reminderData.partner_id) {
+        console.error('[ReminderService] partner_id is required but not provided');
+        return { data: null, error: 'Partner ID is required' };
+      }
+
+      // Verify that the partner exists and belongs to the user
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('id', reminderData.partner_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (partnerError || !partner) {
+        console.error('[ReminderService] Partner not found or access denied:', partnerError);
+        return { data: null, error: 'Partner not found or access denied' };
+      }
+
       const insertData: ReminderInsert = {
         user_id: user.id,
         ...reminderData,
@@ -98,6 +117,19 @@ class ReminderService {
         console.error('Get reminders error:', error.message);
         return { data: null, error: error.message };
       }
+
+      console.log('[ReminderService] getReminders returned:', {
+        totalReminders: data?.length || 0,
+        completedReminders: data?.filter((r: any) => r.is_completed).length || 0,
+        uncompletedReminders: data?.filter((r: any) => !r.is_completed).length || 0,
+        reminders: data?.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          is_completed: r.is_completed,
+          completed_at: r.completed_at,
+          scheduled_date: r.scheduled_date
+        })) || []
+      });
 
       return { data: data || [], error: null };
     } catch (error) {

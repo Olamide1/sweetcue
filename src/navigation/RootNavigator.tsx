@@ -210,30 +210,40 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
         setSignUpLoading(false);
         return;
       }
-      // 2. Wait for a valid session after successful sign-up
+      
+      // 2. Wait for a valid session after successful sign-up with shorter timeout
       let user = null;
       let tries = 0;
-      while (!user && tries < 10) {
+      const maxTries = 5; // Reduced from 10 to 5
+      const delay = 200; // Reduced from 300ms to 200ms
+      
+      while (!user && tries < maxTries) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
           user = currentUser;
           break;
         }
-        await new Promise(res => setTimeout(res, 300));
+        await new Promise(res => setTimeout(res, delay));
         tries++;
       }
+      
       setSignUpLoading(false);
+      
       if (!user) {
         setSignUpError('Authentication not ready. Please try again.');
         return;
       }
+      
       setIsAuthenticated(true);
       setUserData(prev => ({
         ...prev,
         partnerName: partnerName || prev.partnerName,
         email: email || prev.email,
       }));
-      // Subscription status and navigation will be handled by useEffect
+      
+      // Navigate to dashboard immediately instead of waiting for useEffect
+      setCurrentScreen('dashboard');
+      
     } catch (err: any) {
       setSignUpError(err.message || 'Sign up failed. Please try again.');
       setSignUpLoading(false);

@@ -92,25 +92,39 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
   const handleSignIn = async () => {
     setLoading(true); // Set loading immediately for instant feedback
     setError(null);
+    
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      
       if (authError || !data.user) {
         setError(authError?.message || 'Login failed');
         setLoading(false);
         Alert.alert('Sign In Error', authError?.message || 'Login failed');
         return;
       }
-      // Fetch partner profile
-      const { data: partner, error: partnerError } = await partnerService.getPartner();
+      
+      // Fetch partner profile with a timeout to prevent hanging
+      const partnerPromise = partnerService.getPartner();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Partner fetch timeout')), 5000)
+      );
+      
+      const { data: partner, error: partnerError } = await Promise.race([
+        partnerPromise,
+        timeoutPromise
+      ]) as any;
+      
       setLoading(false);
+      
       if (partnerError) {
         setError(partnerError);
         Alert.alert('Profile Error', partnerError);
         return;
       }
+      
       // Call onAuthenticate with partner name and email
       onAuthenticate?.(partner?.name || '', email);
     } catch (err: any) {

@@ -65,6 +65,25 @@ class GestureService {
         return { data: null, error: 'User not authenticated' };
       }
       
+      // Validate that partner_id is provided
+      if (!gesture.partner_id) {
+        console.error('[GestureService] partner_id is required but not provided');
+        return { data: null, error: 'Partner ID is required' };
+      }
+
+      // Verify that the partner exists and belongs to the user
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('id', gesture.partner_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (partnerError || !partner) {
+        console.error('[GestureService] Partner not found or access denied:', partnerError);
+        return { data: null, error: 'Partner not found or access denied' };
+      }
+      
       const insertData = { ...gesture, user_id: user.id };
       console.log('[GestureService] Inserting gesture data:', insertData);
       

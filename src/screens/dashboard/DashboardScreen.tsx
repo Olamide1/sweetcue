@@ -174,24 +174,85 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
     const { data } = await reminderService.getReminders();
     if (data) {
       const now = new Date();
-      const completedThisWeek = data.filter((r: any) => r.is_completed && isThisWeek(parseISO(r.scheduled_date)));
-      // Compare dates only, not times - a reminder is missed if the date has passed
       const today = new Date();
       const todayStartOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       
+      // Count completed reminders this week
+      const completedThisWeek = data.filter((r: any) => {
+        if (!r.is_completed) return false;
+        const scheduledDate = new Date(r.scheduled_date);
+        return isThisWeek(scheduledDate);
+      });
+      
+      // Count missed reminders this week (scheduled this week but not completed and date has passed)
       const missedThisWeek = data.filter((r: any) => {
-        if (r.is_completed || !isThisWeek(parseISO(r.scheduled_date))) return false;
+        if (r.is_completed) return false;
         
         const scheduledDate = new Date(r.scheduled_date);
-        const scheduledStartOfDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+        if (!isThisWeek(scheduledDate)) return false;
         
+        const scheduledStartOfDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
         return scheduledStartOfDay < todayStartOfDay; // Only missed if the date has passed
       });
-      setStreak(completedThisWeek.length);
+      
+      // Calculate streak - count consecutive days with completed reminders
+      let currentStreak = 0;
+      const completedReminders = data.filter((r: any) => r.is_completed);
+      
+      if (completedReminders.length > 0) {
+        // Sort by completion date (most recent first)
+        const sortedCompleted = completedReminders.sort((a: any, b: any) => {
+          const dateA = new Date(a.completed_at || a.scheduled_date);
+          const dateB = new Date(b.completed_at || b.scheduled_date);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        // Check for consecutive days with completed reminders (extend to 30 days)
+        let checkDate = new Date(todayStartOfDay);
+        for (let i = 0; i < 30; i++) { // Check last 30 days instead of 7
+          const dayStart = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate());
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          
+          const hasCompletedOnDay = sortedCompleted.some((r: any) => {
+            const completedDate = new Date(r.completed_at || r.scheduled_date);
+            return completedDate >= dayStart && completedDate < dayEnd;
+          });
+          
+          if (hasCompletedOnDay) {
+            currentStreak++;
+          } else {
+            break; // Streak broken
+          }
+          
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+        
+        // If no consecutive streak found, show total completed this week as fallback
+        if (currentStreak === 0) {
+          currentStreak = completedThisWeek.length;
+        }
+      }
+      
+      setStreak(currentStreak);
       setWeekProgress({
         completed: completedThisWeek.length,
         missed: missedThisWeek.length,
         total: completedThisWeek.length + missedThisWeek.length,
+      });
+      
+      console.log('[DashboardScreen] Progress calculation:', {
+        completed: completedThisWeek.length,
+        missed: missedThisWeek.length,
+        total: completedThisWeek.length + missedThisWeek.length,
+        streak: currentStreak,
+        totalCompleted: completedReminders.length,
+        completedReminders: completedReminders.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          completed_at: r.completed_at,
+          scheduled_date: r.scheduled_date,
+          is_completed: r.is_completed
+        }))
       });
     }
   };
@@ -720,23 +781,23 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 
-                  paddingVertical: 6, 
-                  paddingHorizontal: 12, 
-                  borderRadius: 16, 
-                  backgroundColor: theme.colors.neutral[100],
+                  paddingVertical: 8, 
+                  paddingHorizontal: 16, 
+                  borderRadius: 20, 
+                  backgroundColor: theme.colors.primary[50],
                   borderWidth: 1,
-                  borderColor: theme.colors.neutral[200]
+                  borderColor: theme.colors.primary[200]
                 }}
                 onPress={() => onNavigate?.('recentActivity')}
                 accessibilityLabel="View Recent Activity"
                 accessibilityRole="button"
               >
-                <MaterialIcons name="history" size={20} color={theme.colors.neutral[600]} />
+                <MaterialIcons name="history" size={18} color={theme.colors.primary[600]} />
                 <Text style={{ 
                   fontSize: 14, 
                   fontWeight: '600', 
-                  color: theme.colors.neutral[700], 
-                  marginLeft: 4 
+                  color: theme.colors.primary[700], 
+                  marginLeft: 6 
                 }}>
                   Activity
                 </Text>
@@ -906,7 +967,12 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }} />
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-              <Text style={{ fontSize: 13, color: theme.colors.neutral[500] }}>
+              <Text style={{ 
+                fontSize: 13, 
+                color: theme.colors.neutral[500],
+                flex: 1,
+                marginRight: 12
+              }}>
                 {weekProgress.total === 0 ? 'No reminders completed or missed this week yet.' : `${weekProgress.completed + weekProgress.missed} total reminders this week`}
               </Text>
               <TouchableOpacity
@@ -914,18 +980,21 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   flexDirection: 'row', 
                   alignItems: 'center',
                   backgroundColor: theme.colors.primary[50],
-                  borderRadius: 8,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderWidth: 1,
+                  borderColor: theme.colors.primary[200],
+                  flexShrink: 0
                 }}
                 onPress={() => onNavigate?.('recentActivity')}
               >
-                <MaterialIcons name="history" size={14} color={theme.colors.primary[600]} />
+                <MaterialIcons name="history" size={16} color={theme.colors.primary[600]} />
                 <Text style={{ 
-                  fontSize: 12, 
+                  fontSize: 13, 
                   fontWeight: '600', 
                   color: theme.colors.primary[600], 
-                  marginLeft: 4 
+                  marginLeft: 6 
                 }}>
                   View All
                 </Text>
