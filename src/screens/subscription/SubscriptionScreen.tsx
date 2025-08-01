@@ -387,38 +387,35 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                   Your subscription has expired. Please choose a new plan below.
                 </Text>
               )}
-              <View style={{ flexDirection: 'row', marginTop: 10 }}>
+              <View style={{ 
+                flexDirection: 'row', 
+                marginTop: 10,
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                gap: 12
+              }}>
                 {subscriptionStatus.status === 'active' && subscriptionStatus.planType !== 'trial' && (
                   <Button
                     title="Cancel Subscription"
                     variant="secondary"
-                    style={{ marginRight: 12, opacity: continueLoading ? 0.5 : 1 }}
+                    style={{ 
+                      flex: 1,
+                      opacity: continueLoading ? 0.5 : 1 
+                    }}
                     onPress={handleCancelSubscription}
                     disabled={continueLoading}
                   />
                 )}
-                {subscriptionStatus.status === 'active' && (
+                {(subscriptionStatus.status === 'active' || subscriptionStatus.status === 'cancelled' || subscriptionStatus.status === 'expired') && (
                   <Button
                     title="Change Plan"
                     variant="primary"
-                    style={{ opacity: continueLoading ? 0.5 : 1 }}
+                    style={{ 
+                      flex: 1,
+                      opacity: continueLoading ? 0.5 : 1 
+                    }}
                     onPress={handleChangePlan}
                     disabled={continueLoading}
-                  />
-                )}
-                {(subscriptionStatus.status === 'cancelled' || subscriptionStatus.status === 'expired') && (
-                  <Button
-                    title="Change Plan"
-                    variant="primary"
-                    onPress={handleChangePlan}
-                  />
-                )}
-                {subscriptionStatus.status === 'active' && (
-                  <Button
-                    title="Manage Subscription"
-                    variant="primary"
-                    style={{ marginLeft: 12 }}
-                    onPress={() => setShowManageModal(true)}
                   />
                 )}
               </View>
