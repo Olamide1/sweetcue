@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
 import { accountService } from '../../services/account';
+import { authService } from '../../services/auth';
+import EmailVerificationReminder from '../../components/EmailVerificationReminder';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
@@ -24,26 +26,36 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate, subscriptio
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [showEmailVerificationReminder, setShowEmailVerificationReminder] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
   const isSmallScreen = screenWidth < 375;
 
-  // Load deletion summary on mount
+  // Load deletion summary and check email verification on mount
   useEffect(() => {
-    const loadDeletionSummary = async () => {
+    const loadData = async () => {
       setLoadingSummary(true);
       try {
         const summary = await accountService.getDeletionSummary();
         setDeletionSummary(summary);
+        
+        // Check email verification
+        const user = await authService.getCurrentUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+          const verified = await authService.isEmailVerified();
+          setShowEmailVerificationReminder(!verified);
+        }
       } catch (error) {
-        console.error('Error loading deletion summary:', error);
+        console.error('Error loading data:', error);
       } finally {
         setLoadingSummary(false);
       }
     };
 
-    loadDeletionSummary();
+    loadData();
   }, []);
 
   // Create responsive styles
@@ -201,6 +213,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigate, subscriptio
             </TouchableOpacity>
             <Text style={responsiveStyles.title}>Settings</Text>
           </View>
+
+          {/* Email Verification Reminder */}
+          {showEmailVerificationReminder && (
+            <EmailVerificationReminder
+              email={userEmail}
+              onDismiss={() => setShowEmailVerificationReminder(false)}
+            />
+          )}
 
           {/* Settings Options */}
           <View style={styles.section}>

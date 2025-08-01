@@ -3,22 +3,18 @@ import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, Keyb
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '../../design-system/components';
 import { theme } from '../../design-system/tokens';
-import supabase from '../../lib/supabase';
-import { partnerService } from '../../services/partners';
 import { authService } from '../../services/auth';
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'passwordReset';
-
-interface SignInScreenProps {
-  onNavigate?: (screen: Screen) => void;
-  onAuthenticate?: (partnerName?: string, email?: string) => void;
+interface PasswordResetScreenProps {
+  onNavigate?: (screen: 'signIn' | 'welcome') => void;
+  email?: string;
 }
 
-const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const PasswordResetScreen: React.FC<PasswordResetScreenProps> = ({ onNavigate, email: initialEmail }) => {
+  const [email, setEmail] = useState(initialEmail || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   // Get screen dimensions for responsive design
   const { width: screenWidth } = Dimensions.get('window');
@@ -40,10 +36,6 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
       paddingTop: theme.spacing[4],
       paddingBottom: theme.spacing[2],
     },
-    welcomeEmoji: {
-      fontSize: isSmallScreen ? 40 : isMediumScreen ? 44 : 48,
-      marginBottom: theme.spacing[4],
-    },
     title: {
       fontSize: isSmallScreen ? 26 : isMediumScreen ? 29 : 32,
       fontWeight: '700' as const,
@@ -57,6 +49,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
       color: theme.colors.neutral[600],
       textAlign: 'center' as const,
       lineHeight: 22,
+      marginBottom: theme.spacing[6],
     },
     inputLabel: {
       fontSize: isSmallScreen ? 14 : 16,
@@ -74,80 +67,39 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
       borderWidth: 1,
       borderColor: theme.colors.neutral[200],
     },
-    forgotPasswordText: {
-      fontSize: isSmallScreen ? 12 : 14,
-      color: theme.colors.primary[600],
-      textAlign: 'center' as const,
-    },
-    signUpPrompt: {
-      fontSize: isSmallScreen ? 14 : 16,
-      color: theme.colors.neutral[600],
-    },
-    signUpLink: {
-      fontSize: isSmallScreen ? 14 : 16,
-      fontWeight: '600' as const,
-      color: theme.colors.primary[600],
-    },
   });
 
-  const handleSignIn = async () => {
-    setLoading(true); // Set loading immediately for instant feedback
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    setLoading(true);
     setError(null);
-    
+
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await authService.resetPassword(email.trim());
       
-      if (authError || !data.user) {
-        setError(authError?.message || 'Login failed');
-        setLoading(false);
-        Alert.alert('Sign In Error', authError?.message || 'Login failed');
-        return;
+      if (error) {
+        setError(error.message);
+      } else {
+        setEmailSent(true);
+        Alert.alert(
+          'Password Reset Email Sent',
+          'Check your email for a link to reset your password. If you don\'t see it, check your spam folder.',
+          [{ text: 'OK' }]
+        );
       }
-      
-      // Fetch partner profile with a timeout to prevent hanging
-      const partnerPromise = partnerService.getPartner();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Partner fetch timeout')), 5000)
-      );
-      
-      const { data: partner, error: partnerError } = await Promise.race([
-        partnerPromise,
-        timeoutPromise
-      ]) as any;
-      
-      if (partnerError) {
-        setError(partnerError);
-        setLoading(false);
-        Alert.alert('Profile Error', partnerError);
-        return;
-      }
-      
-      // Keep loading active until navigation is complete
-      // Call onAuthenticate with partner name and email
-      onAuthenticate?.(partner?.name || '', email);
-      
-      // Clear loading state after a short delay to ensure smooth transition
-      setTimeout(() => {
-        setLoading(false);
-      }, 100);
-      
     } catch (err: any) {
-      setError(err.message || 'Unexpected error');
+      setError(err.message || 'Failed to send reset email');
+    } finally {
       setLoading(false);
-      Alert.alert('Unexpected Error', err.message || 'Unexpected error');
     }
   };
 
-  const handleBackToWelcome = () => {
-    onNavigate?.('welcome');
-  };
-
-  const handleForgotPassword = () => {
-    // Navigate to password reset screen
-    onNavigate?.('passwordReset');
+  const handleBackToSignIn = () => {
+    onNavigate?.('signIn');
   };
 
   return (
@@ -167,7 +119,7 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
         >
           {/* Header */}
           <View style={responsiveStyles.header}>
-            <TouchableOpacity onPress={handleBackToWelcome} style={styles.backButton}>
+            <TouchableOpacity onPress={handleBackToSignIn} style={styles.backButton}>
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
           </View>
@@ -181,9 +133,10 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
             {/* Main Content */}
             <View style={styles.mainContent}>
               <View style={styles.titleSection}>
-                <Text style={responsiveStyles.welcomeEmoji}>💕</Text>
-                <Text style={responsiveStyles.title}>Welcome back!</Text>
-                <Text style={responsiveStyles.subtitle}>Sign in to your SweetCue account</Text>
+                <Text style={responsiveStyles.title}>Reset Password</Text>
+                <Text style={responsiveStyles.subtitle}>
+                  Enter your email address and we'll send you a link to reset your password.
+                </Text>
               </View>
 
               {/* Form */}
@@ -199,53 +152,41 @@ const SignInScreen: React.FC<SignInScreenProps> = ({ onNavigate, onAuthenticate 
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    returnKeyType="next"
-                    onSubmitEditing={() => Keyboard.dismiss()}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={responsiveStyles.inputLabel}>Password</Text>
-                  <TextInput
-                    style={responsiveStyles.input}
-                    placeholder="Enter your password"
-                    placeholderTextColor={theme.colors.neutral[400]}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
                     returnKeyType="done"
-                    onSubmitEditing={handleSignIn}
+                    onSubmitEditing={handleResetPassword}
                   />
                 </View>
 
-                <TouchableOpacity 
-                  onPress={handleForgotPassword} 
-                  style={[styles.forgotPassword, { backgroundColor: 'rgba(255, 255, 255, 0.8)', padding: 8, borderRadius: 8 }]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[responsiveStyles.forgotPasswordText, { fontWeight: '600' }]}>Forgot your password?</Text>
-                </TouchableOpacity>
+                {error && (
+                  <Text style={styles.errorText}>{error}</Text>
+                )}
+
+                {emailSent && (
+                  <View style={styles.successContainer}>
+                    <Text style={styles.successText}>
+                      ✅ Password reset email sent! Check your inbox.
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           </ScrollView>
 
           <View style={styles.actionSection}>
             <Button
-              title="Sign In"
+              title={loading ? "Sending..." : "Send Reset Email"}
               variant="primary"
               size="lg"
-              onPress={handleSignIn}
-              style={!email.trim() || !password.trim() || loading ? { ...styles.signInButton, ...styles.signInButtonDisabled } : styles.signInButton}
+              onPress={handleResetPassword}
+              style={!email.trim() || loading ? { ...styles.resetButton, ...styles.resetButtonDisabled } : styles.resetButton}
               loading={loading}
-              disabled={!email.trim() || !password.trim() || loading}
+              disabled={!email.trim() || loading}
             />
             
-            <View style={styles.signUpSection}>
-              <Text style={responsiveStyles.signUpPrompt}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => onNavigate?.('partnerProfile')}>
-                <Text style={responsiveStyles.signUpLink}>Sign up free</Text>
+            <View style={styles.backToSignInSection}>
+              <Text style={styles.backToSignInText}>Remember your password? </Text>
+              <TouchableOpacity onPress={handleBackToSignIn}>
+                <Text style={styles.backToSignInLink}>Sign in</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -321,10 +262,6 @@ const styles = StyleSheet.create({
   inputGroup: {
     gap: theme.spacing[3],
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginTop: theme.spacing[2],
-  },
 
   // Action Section
   actionSection: {
@@ -337,7 +274,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
   },
-  signInButton: {
+  resetButton: {
     width: '100%',
     backgroundColor: '#6366F1',
     borderRadius: 16,
@@ -345,15 +282,43 @@ const styles = StyleSheet.create({
     ...theme.elevation.lg,
     shadowColor: '#6366F1',
     shadowOpacity: 0.3,
-    opacity: 1, // Always full opacity when enabled
+    opacity: 1,
   },
-  signInButtonDisabled: {
-    opacity: 0.5, // Only dim when actually disabled
+  resetButtonDisabled: {
+    opacity: 0.5,
   },
-  signUpSection: {
+  backToSignInSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  backToSignInText: {
+    fontSize: 16,
+    color: theme.colors.neutral[600],
+  },
+  backToSignInLink: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary[600],
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: theme.spacing[2],
+  },
+  successContainer: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: theme.spacing[4],
+    marginTop: theme.spacing[2],
+  },
+  successText: {
+    color: '#166534',
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
 
-export default SignInScreen; 
+export default PasswordResetScreen; 

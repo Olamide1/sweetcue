@@ -178,6 +178,44 @@ class AuthService {
   }
 
   /**
+   * Send email verification
+   */
+  async sendEmailVerification(email: string): Promise<{ error: AuthError | null }> {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      });
+      
+      if (error) {
+        console.error('Send email verification error:', error.message);
+        return { error };
+      }
+
+      console.log('Email verification sent to:', email);
+      return { error: null };
+    } catch (error) {
+      console.error('Send email verification error:', error);
+      return { 
+        error: { message: 'An unexpected error occurred while sending verification email' } as AuthError 
+      };
+    }
+  }
+
+  /**
+   * Check if user email is verified
+   */
+  async isEmailVerified(): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user?.email_confirmed_at ? true : false;
+    } catch (error) {
+      console.error('Check email verification error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Check if user is authenticated
    */
   async isAuthenticated(): Promise<boolean> {

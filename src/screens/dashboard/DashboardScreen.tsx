@@ -11,6 +11,8 @@ import DatePicker from '../../components/DatePicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { format, isThisWeek, parseISO } from 'date-fns';
 import { subscriptionService } from '../../services/subscriptions';
+import EmailVerificationReminder from '../../components/EmailVerificationReminder';
+import { authService } from '../../services/auth';
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'subscription' | 'editPartner' | 'settings' | 'recentActivity';
 
@@ -32,6 +34,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   subscriptionStatus
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showEmailVerificationReminder, setShowEmailVerificationReminder] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(true);
+  const [userEmail, setUserEmail] = useState('');
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -259,6 +264,23 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   };
   useEffect(() => {
     recalculateWeekProgress();
+    
+    // Check email verification status
+    const checkEmailVerification = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+          const verified = await authService.isEmailVerified();
+          setIsEmailVerified(verified);
+          setShowEmailVerificationReminder(!verified);
+        }
+      } catch (error) {
+        console.error('Error checking email verification:', error);
+      }
+    };
+    
+    checkEmailVerification();
     
     // Refresh data when screen comes into focus
     const unsubscribe = () => {
@@ -824,6 +846,15 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </Pressable>
             </View>
           </View>
+          
+          {/* Email Verification Reminder */}
+          {showEmailVerificationReminder && (
+            <EmailVerificationReminder
+              email={userEmail}
+              onDismiss={() => setShowEmailVerificationReminder(false)}
+            />
+          )}
+          
           {/* Profile Dropdown Modal (top right, elegant, correct order) */}
           {showProfileMenu && (
             <Modal

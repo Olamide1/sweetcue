@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
+import PasswordResetScreen from '../screens/auth/PasswordResetScreen';
 import PartnerProfileScreen from '../screens/profile/PartnerProfileScreen';
 import EditPartnerScreen from '../screens/profile/EditPartnerScreen';
 import SubscriptionScreen from '../screens/subscription/SubscriptionScreen';
@@ -20,7 +21,7 @@ interface RootNavigatorProps {
   isAuthenticated?: boolean;
 }
 
-type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'dashboard' | 'addReminder' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
+type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'passwordReset' | 'dashboard' | 'addReminder' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
 
 interface UserData {
   email: string;
@@ -428,6 +429,13 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
           <SignInScreen 
             onNavigate={handleNavigate} 
             onAuthenticate={handleSignIn}
+          />
+        );
+      case 'passwordReset':
+        return (
+          <PasswordResetScreen 
+            onNavigate={handleNavigate}
+            email={userData.email}
           />
         );
       case 'partnerProfile':
