@@ -547,11 +547,6 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({
                 You are subscribed to the {subscriptionStatus.planType} plan. Next billing: {new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}
               </Text>
             )}
-            {onActiveWeekly && (
-              <Text style={{ color: theme.colors.success[600], textAlign: 'center', marginTop: 8 }}>
-                You are subscribed to the weekly plan. Next billing: {subscriptionStatus.nextBillingDate ? new Date(subscriptionStatus.nextBillingDate).toLocaleDateString() : 'N/A'}
-              </Text>
-            )}
             {onCancelledOrExpiredPaid && (
               <Text style={{ color: theme.colors.error[600], textAlign: 'center', marginTop: 8 }}>
                 Your subscription is {subscriptionStatus.status}.

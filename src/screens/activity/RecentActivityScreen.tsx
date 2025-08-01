@@ -41,6 +41,7 @@ const RecentActivityScreen: React.FC<RecentActivityScreenProps> = ({ onNavigate 
   const fetchReminders = async () => {
     setLoading(true);
     const { data } = await reminderService.getReminders();
+    
     if (data) {
       const now = new Date();
       const todayStartOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -69,15 +70,6 @@ const RecentActivityScreen: React.FC<RecentActivityScreenProps> = ({ onNavigate 
 
   useEffect(() => {
     fetchReminders();
-    // Optionally, add event listener for focus if using navigation
-    const unsubscribe = () => {
-      if (typeof window !== 'undefined' && window.addEventListener) {
-        window.addEventListener('focus', fetchReminders);
-        return () => window.removeEventListener('focus', fetchReminders);
-      }
-      return () => {};
-    };
-    return unsubscribe();
   }, []);
 
   const handleMarkCompleted = async (reminder: any, idx: number) => {
@@ -87,12 +79,21 @@ const RecentActivityScreen: React.FC<RecentActivityScreenProps> = ({ onNavigate 
       const { error } = await reminderService.completeReminder(reminder.id);
       if (error) {
         showToast(error);
+        // Reset animation state on error
+        missed[idx]._animating = false;
+        setMissed([...missed]);
       } else {
         showToast('Marked as completed!');
-        setTimeout(fetchReminders, 400);
+        // Wait a moment for database to update, then refresh data
+        setTimeout(async () => {
+          await fetchReminders();
+        }, 500);
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to complete reminder');
+      // Reset animation state on error
+      missed[idx]._animating = false;
+      setMissed([...missed]);
     }
   };
 

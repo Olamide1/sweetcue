@@ -118,18 +118,7 @@ class ReminderService {
         return { data: null, error: error.message };
       }
 
-      console.log('[ReminderService] getReminders returned:', {
-        totalReminders: data?.length || 0,
-        completedReminders: data?.filter((r: any) => r.is_completed).length || 0,
-        uncompletedReminders: data?.filter((r: any) => !r.is_completed).length || 0,
-        reminders: data?.map((r: any) => ({
-          id: r.id,
-          title: r.title,
-          is_completed: r.is_completed,
-          completed_at: r.completed_at,
-          scheduled_date: r.scheduled_date
-        })) || []
-      });
+
 
       return { data: data || [], error: null };
     } catch (error) {
@@ -215,11 +204,12 @@ class ReminderService {
         return { data: null, error: 'User not authenticated' };
       }
 
+      const now = new Date();
       const updateData: ReminderUpdate = {
         is_completed: true,
-        completed_at: new Date().toISOString(),
+        completed_at: now.toISOString(),
         completion_note: completionNote || null,
-        updated_at: new Date().toISOString(),
+        updated_at: now.toISOString(),
       };
 
       const { data, error } = await supabase
@@ -236,6 +226,15 @@ class ReminderService {
       }
 
       console.log('Reminder completed:', data.title);
+      
+      // Reschedule notifications after completion
+      try {
+        const { notificationScheduler } = await import('./notificationScheduler');
+        await notificationScheduler.scheduleAllNotifications();
+      } catch (notificationError) {
+        console.error('Error rescheduling notifications after completion:', notificationError);
+      }
+      
       return { data, error: null };
     } catch (error) {
       console.error('Complete reminder error:', error);

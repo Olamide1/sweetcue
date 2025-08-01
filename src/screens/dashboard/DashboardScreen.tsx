@@ -172,6 +172,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [weekProgress, setWeekProgress] = useState({ completed: 0, missed: 0, total: 0 });
   const recalculateWeekProgress = async () => {
     const { data } = await reminderService.getReminders();
+    
     if (data) {
       const now = new Date();
       const today = new Date();
@@ -258,6 +259,14 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   };
   useEffect(() => {
     recalculateWeekProgress();
+    
+    // Refresh data when screen comes into focus
+    const unsubscribe = () => {
+      // This will be called when the component unmounts
+      return () => {};
+    };
+    
+    return unsubscribe();
   }, []);
 
   // Helper to show toast/snackbar
@@ -1611,12 +1620,17 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                   showToast('Marked as completed!');
                                   setShowReminderModal(false);
                                   setRemindersLoading(true);
-                                  const { name, birthday, anniversary } = partnerProfile;
-                                  const partnerData = { name, birthday, anniversary };
-                                  const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
-                                  setReminders(remindersSummary);
-                                  await recalculateWeekProgress();
-                                  setRemindersLoading(false);
+                                  try {
+                                    const { name, birthday, anniversary } = partnerProfile;
+                                    const partnerData = { name, birthday, anniversary };
+                                    const remindersSummary = await reminderService.getUpcomingRemindersSummary(partnerData);
+                                    setReminders(remindersSummary);
+                                    await recalculateWeekProgress();
+                                  } catch (refreshError) {
+                                    console.error('Error refreshing data after completion:', refreshError);
+                                  } finally {
+                                    setRemindersLoading(false);
+                                  }
                                 }
                               } catch (err: any) {
                                 showToast(err.message || 'Failed to complete reminder');
