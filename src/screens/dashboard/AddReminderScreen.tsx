@@ -27,6 +27,8 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
   const [loveLanguages, setLoveLanguages] = useState<string[]>([]);
   const [showDateModal, setShowDateModal] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(scheduledDate);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [showMoreBelow, setShowMoreBelow] = useState(false);
@@ -34,6 +36,18 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
 
   useEffect(() => {
     loadData();
+    // Check if we're editing an existing reminder
+    const editingReminder = (global as any).editingReminder;
+    if (editingReminder) {
+      setTitle(editingReminder.title);
+      setDescription(editingReminder.description || '');
+      setScheduledDate(new Date(editingReminder.scheduled_date));
+      setTempDate(new Date(editingReminder.scheduled_date));
+      setIsEditing(true);
+      setEditingReminderId(editingReminder.id);
+      // Clear the global variable
+      (global as any).editingReminder = null;
+    }
   }, []);
 
   const loadData = async () => {
@@ -137,12 +151,20 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
         scheduled_date: scheduledDate.toISOString().split('T')[0], // YYYY-MM-DD format
       };
 
-      const { error } = await reminderService.createReminder(reminderData);
-      
-      if (error) {
-        Alert.alert('Error', error);
+      let result;
+      if (isEditing && editingReminderId) {
+        // Update existing reminder
+        result = await reminderService.updateReminder(editingReminderId, reminderData);
       } else {
-        Alert.alert('Success', 'Reminder created successfully!', [
+        // Create new reminder
+        result = await reminderService.createReminder(reminderData);
+      }
+      
+      if (result.error) {
+        Alert.alert('Error', result.error);
+      } else {
+        const action = isEditing ? 'updated' : 'created';
+        Alert.alert('Success', `Reminder ${action} successfully!`, [
           { text: 'OK', onPress: () => {
             onReminderAdded?.();
             onNavigate('dashboard');
@@ -213,14 +235,14 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
               <MaterialIcons name="arrow-back" size={24} color={theme.colors.primary[600]} />
               <Text style={styles.backButtonText}>Back</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Add Reminder</Text>
+            <Text style={styles.headerTitle}>{isEditing ? 'Edit Reminder' : 'Add Reminder'}</Text>
             <TouchableOpacity 
               style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
               onPress={handleSave}
               disabled={loading}
             >
               <Text style={styles.saveButtonText}>
-                {loading ? 'Saving...' : 'Save'}
+                {loading ? (isEditing ? 'Updating...' : 'Saving...') : (isEditing ? 'Update' : 'Save')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -228,7 +250,10 @@ const AddReminderScreen: React.FC<AddReminderScreenProps> = ({ onNavigate, onRem
           {/* Form */}
           <Card style={styles.formCard}>
             <Text style={{ fontSize: 15, color: theme.colors.neutral[600], marginBottom: theme.spacing[3] }}>
-              Choose a gesture idea or type your own. You can customize any suggestion or create something completely new.
+              {isEditing 
+                ? 'Update your reminder details. You can change the gesture, title, description, or scheduled date.'
+                : 'Choose a gesture idea or type your own. You can customize any suggestion or create something completely new.'
+              }
             </Text>
 
             {/* Gesture Recommendations */}

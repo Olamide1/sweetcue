@@ -281,6 +281,104 @@ class ReminderService {
   }
 
   /**
+   * Update an existing reminder
+   */
+  async updateReminder(reminderId: string, updateData: Partial<ReminderData>): Promise<ReminderResponse> {
+    try {
+      console.log('[ReminderService] Updating reminder...', { reminderId, updateData });
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('[ReminderService] User not authenticated');
+        return { data: null, error: 'User not authenticated' };
+      }
+
+      // Verify that the reminder exists and belongs to the user
+      const { data: existingReminder, error: fetchError } = await supabase
+        .from('reminders')
+        .select('*')
+        .eq('id', reminderId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError || !existingReminder) {
+        console.error('[ReminderService] Reminder not found or access denied:', fetchError);
+        return { data: null, error: 'Reminder not found or access denied' };
+      }
+
+      // If partner_id is being updated, verify the partner exists and belongs to the user
+      if (updateData.partner_id && updateData.partner_id !== existingReminder.partner_id) {
+        const { data: partner, error: partnerError } = await supabase
+          .from('partners')
+          .select('id')
+          .eq('id', updateData.partner_id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (partnerError || !partner) {
+          console.error('[ReminderService] Partner not found or access denied:', partnerError);
+          return { data: null, error: 'Partner not found or access denied' };
+        }
+      }
+
+      const updatePayload = {
+        ...updateData,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('reminders')
+        .update(updatePayload)
+        .eq('id', reminderId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[ReminderService] Update reminder error:', error.message, error);
+        return { data: null, error: error.message };
+      }
+
+      console.log('[ReminderService] Reminder updated successfully:', data.title);
+      return { data, error: null };
+    } catch (error) {
+      console.error('[ReminderService] Update reminder error:', error);
+      return { data: null, error: 'An unexpected error occurred' };
+    }
+  }
+
+  /**
+   * Get a single reminder by ID
+   */
+  async getReminderById(reminderId: string): Promise<ReminderResponse> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return { data: null, error: 'User not authenticated' };
+      }
+
+      const { data, error } = await supabase
+        .from('reminders')
+        .select('*')
+        .eq('id', reminderId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('[ReminderService] Get reminder by ID error:', error.message, error);
+        return { data: null, error: error.message };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      console.error('[ReminderService] Get reminder by ID error:', error);
+      return { data: null, error: 'An unexpected error occurred' };
+    }
+  }
+
+  /**
    * Delete a reminder
    */
   async deleteReminder(reminderId: string): Promise<{ error: string | null }> {

@@ -1589,6 +1589,8 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
                           disabled={modalActionLoading}
                           onPress={() => {
                             setShowReminderModal(false);
+                            // Store the reminder data for editing
+                            (global as any).editingReminder = selectedReminder;
                             onNavigate && onNavigate('addReminder' as Screen);
                           }}
                         >
