@@ -27,6 +27,8 @@ class NotificationService {
    */
   async initialize(): Promise<void> {
     try {
+      console.log('[NotificationService] Starting initialization...');
+      
       // Configure notification behavior
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
@@ -37,50 +39,69 @@ class NotificationService {
         }),
       });
 
-      // Request permissions
+      // Request permissions with better error handling
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       
+      console.log('[NotificationService] Current permission status:', existingStatus);
+      
       if (existingStatus !== 'granted') {
+        console.log('[NotificationService] Requesting permissions...');
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
+        console.log('[NotificationService] Permission request result:', status);
       }
       
       if (finalStatus !== 'granted') {
-        console.log('[NotificationService] Permission not granted');
+        console.log('[NotificationService] Permission not granted, notifications will not work');
         return;
       }
 
-      // Get push token
+      console.log('[NotificationService] Permissions granted, proceeding with setup...');
+
+      // Get push token with better error handling
       if (Device.isDevice) {
-        const token = await Notifications.getExpoPushTokenAsync({
-          projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-        });
-        this.expoPushToken = token.data;
-        console.log('[NotificationService] Push token:', this.expoPushToken);
-        
-        // Save token to user profile
-        await this.savePushToken(this.expoPushToken);
+        try {
+          const token = await Notifications.getExpoPushTokenAsync({
+            projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
+          });
+          this.expoPushToken = token.data;
+          console.log('[NotificationService] Push token obtained:', this.expoPushToken);
+          
+          // Save token to user profile
+          await this.savePushToken(this.expoPushToken);
+        } catch (tokenError) {
+          console.error('[NotificationService] Error getting push token:', tokenError);
+          // Continue without push token - local notifications will still work
+        }
       }
 
       // Configure notification channels for Android
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('reminders', {
-          name: '💝 SweetCue Reminders',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF6B9D',
-          description: 'Reminders for your relationship gestures',
-        });
+        try {
+          await Notifications.setNotificationChannelAsync('reminders', {
+            name: '💝 SweetCue Reminders',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF6B9D',
+            description: 'Reminders for your relationship gestures',
+          });
 
-        await Notifications.setNotificationChannelAsync('important-dates', {
-          name: '🎂 Important Dates',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF6B9D',
-          description: 'Birthday and anniversary notifications',
-        });
+          await Notifications.setNotificationChannelAsync('important-dates', {
+            name: '🎂 Important Dates',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF6B9D',
+            description: 'Birthday and anniversary notifications',
+          });
+          
+          console.log('[NotificationService] Android notification channels configured');
+        } catch (channelError) {
+          console.error('[NotificationService] Error configuring Android channels:', channelError);
+        }
       }
+
+      console.log('[NotificationService] Initialization completed successfully');
     } catch (error) {
       console.error('[NotificationService] Initialization error:', error);
     }
@@ -118,12 +139,22 @@ class NotificationService {
         return null;
       }
 
+      // Ensure the scheduled date is in the future
+      const now = new Date();
+      if (reminder.scheduledDate <= now) {
+        console.log('[NotificationService] Scheduled date is in the past, skipping:', reminder.scheduledDate);
+        return null;
+      }
+
+      console.log('[NotificationService] Scheduling notification for:', reminder.scheduledDate);
+
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: reminder.title,
           body: reminder.body,
           data: reminder.data || {},
           sound: 'default',
+          priority: 'high',
         },
         trigger: {
           date: reminder.scheduledDate,
@@ -131,7 +162,7 @@ class NotificationService {
         },
       });
 
-      console.log('[NotificationService] Scheduled reminder:', notificationId);
+      console.log('[NotificationService] Successfully scheduled reminder:', notificationId, 'for', reminder.scheduledDate);
       return notificationId;
     } catch (error) {
       console.error('[NotificationService] Error scheduling reminder:', error);

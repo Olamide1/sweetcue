@@ -184,8 +184,15 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
       // Navigate to dashboard if user has active subscription or trial
       if (status.isActive || (status.hasSubscription && status.planType === 'trial' && !status.isTrialExpired)) {
         setCurrentScreen('dashboard');
-      } else {
+      } else if (!status.hasSubscription) {
+        // Only go to subscription if user has no subscription at all
         setCurrentScreen('subscription');
+      } else {
+        // If user has subscription but it's not active, stay on current screen
+        // or go to dashboard to let them manage from there
+        if (currentScreen !== ('subscription' as Screen)) {
+          setCurrentScreen('dashboard');
+        }
       }
     };
     fetchSubscription();

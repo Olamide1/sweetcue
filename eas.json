@@ -6,16 +6,41 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "preview": {
+      "ios": {
+        "appleId": "olamideakomolafe1234@gmail.com",
+        "appleTeamId": "X86KTB5ZY7",
+        "ascAppId": "6749491841"
+      }
+    },
+    "production": {
+      "ios": {
+        "appleId": "olamideakomolafe1234@gmail.com",
+        "ascAppId": "6749491841",
+        "appleTeamId": "X86KTB5ZY7",
+        "ascApiKeyPath": "./AuthKey_SweetCue.p8",
+        "ascApiKeyId": "YOUR_KEY_ID",
+        "ascApiKeyIssuerId": "YOUR_ISSUER_ID"
+      }
+    }
   }
 }

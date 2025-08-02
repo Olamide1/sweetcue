@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "sweetcue-app",
+    "name": "SweetCue",
     "slug": "sweetcue-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -36,9 +36,6 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#FF6B9D",
-          "sounds": [
-            "./assets/notification-sound.wav"
-          ],
           "mode": "production"
         }
       ]

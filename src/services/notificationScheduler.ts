@@ -28,13 +28,23 @@ class NotificationScheduler {
       }
 
       // Cancel existing notifications
+      console.log('[NotificationScheduler] Cancelling existing notifications...');
       await notificationService.cancelAllNotifications();
 
-      // Schedule different types of notifications
+      // Schedule different types of notifications with better error handling
+      console.log('[NotificationScheduler] Scheduling reminder notifications...');
       await this.scheduleReminderNotifications(preferences);
+      
+      console.log('[NotificationScheduler] Scheduling important date notifications...');
       await this.scheduleImportantDateNotifications(preferences);
+      
+      console.log('[NotificationScheduler] Scheduling daily suggestions...');
       await this.scheduleDailySuggestions(preferences);
 
+      // Verify scheduled notifications
+      const scheduledNotifications = await this.getScheduledNotifications();
+      console.log('[NotificationScheduler] Total notifications scheduled:', scheduledNotifications.length);
+      
       console.log('[NotificationScheduler] All notifications scheduled successfully');
     } catch (error) {
       console.error('[NotificationScheduler] Error scheduling notifications:', error);
