@@ -19,6 +19,7 @@ import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native
 
 interface RootNavigatorProps {
   isAuthenticated?: boolean;
+  onUserInteraction?: () => void;
 }
 
 type Screen = 'welcome' | 'partnerProfile' | 'reminderSetup' | 'signIn' | 'passwordReset' | 'dashboard' | 'addReminder' | 'subscription' | 'editPartner' | 'settings' | 'privacySecurity' | 'notifications' | 'helpSupport' | 'recentActivity';
@@ -39,7 +40,7 @@ interface UserData {
   };
 }
 
-const RootNavigator: React.FC<RootNavigatorProps> = () => {
+const RootNavigator: React.FC<RootNavigatorProps> = ({ onUserInteraction }) => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
@@ -200,8 +201,11 @@ const RootNavigator: React.FC<RootNavigatorProps> = () => {
   }, [isAuthenticated]);
 
   const handleNavigate = (screen: Screen) => {
-    console.log('handleNavigate called with:', screen);
+    console.log('[RootNavigator] handleNavigate called with screen:', screen);
     setCurrentScreen(screen);
+    // Track user interaction for notification scheduling
+    console.log('[RootNavigator] Calling onUserInteraction callback');
+    onUserInteraction?.();
   };
 
   const handleAuthentication = async (partnerName?: string, email?: string, password?: string) => {

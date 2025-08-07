@@ -27,6 +27,13 @@ class NotificationScheduler {
         return;
       }
 
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('[NotificationScheduler] User not authenticated, skipping notifications');
+        return;
+      }
+
       // Cancel existing notifications
       console.log('[NotificationScheduler] Cancelling existing notifications...');
       await notificationService.cancelAllNotifications();
@@ -52,12 +59,79 @@ class NotificationScheduler {
   }
 
   /**
+   * Check if we should schedule notifications based on user activity
+   */
+  async shouldScheduleNotifications(): Promise<boolean> {
+    try {
+      console.log('[NotificationScheduler] Checking if should schedule notifications...');
+      
+      // Check if user has any recent activity (reminders, interactions, etc.)
+      const { data: reminders } = await reminderService.getUpcomingReminders(7); // Only check next 7 days
+      const hasRecentActivity = reminders && reminders.length > 0;
+      
+      console.log('[NotificationScheduler] Recent activity check:', { hasRecentActivity, reminderCount: reminders?.length || 0 });
+      
+      if (!hasRecentActivity) {
+        console.log('[NotificationScheduler] No recent user activity found');
+        return false;
+      }
+
+      // Check if user has a partner profile
+      const { data: partner } = await partnerService.getPartner();
+      if (!partner) {
+        console.log('[NotificationScheduler] No partner profile found');
+        return false;
+      }
+
+      // Check if it's during quiet hours (if configured)
+      const preferences = await this.getUserNotificationPreferences();
+      if (preferences.quietHoursStart && preferences.quietHoursEnd) {
+        const now = new Date();
+        const currentTime = now.getHours() * 60 + now.getMinutes();
+        
+        const [startHour, startMinute] = preferences.quietHoursStart.split(':').map(Number);
+        const [endHour, endMinute] = preferences.quietHoursEnd.split(':').map(Number);
+        
+        const startTime = startHour * 60 + startMinute;
+        const endTime = endHour * 60 + endMinute;
+        
+        if (currentTime >= startTime || currentTime <= endTime) {
+          console.log('[NotificationScheduler] Currently in quiet hours, skipping notifications');
+          return false;
+        }
+      }
+
+      // ADDITIONAL CHECK: Only schedule if user has been active in the last 24 hours
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      
+      const { data: recentReminders } = await reminderService.getUpcomingReminders(1); // Check next 1 day
+      const hasVeryRecentActivity = recentReminders && recentReminders.length > 0;
+      
+      console.log('[NotificationScheduler] Very recent activity check:', { hasVeryRecentActivity, recentReminderCount: recentReminders?.length || 0 });
+      
+      if (!hasVeryRecentActivity) {
+        console.log('[NotificationScheduler] No very recent activity (last 24 hours), skipping notifications');
+        return false;
+      }
+
+      console.log('[NotificationScheduler] User activity check passed, proceeding with scheduling');
+      return true;
+    } catch (error) {
+      console.error('[NotificationScheduler] Error checking user activity:', error);
+      return false;
+    }
+  }
+
+  /**
    * Get user notification preferences from Supabase
    */
   private async getUserNotificationPreferences(): Promise<{
     pushEnabled: boolean;
     emailEnabled: boolean;
     reminderAdvance: number;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
   }> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -93,29 +167,37 @@ class NotificationScheduler {
     try {
       console.log('[NotificationScheduler] Scheduling reminder notifications...');
       
-      const { data: reminders } = await reminderService.getUpcomingReminders(30);
+      // Only get reminders for the next 7 days instead of 30
+      const { data: reminders } = await reminderService.getUpcomingReminders(7);
       if (!reminders) return;
 
       for (const reminder of reminders) {
         const scheduledDate = new Date(reminder.scheduled_date);
         const now = new Date();
         
-        // Only schedule if the reminder is in the future
+        // Only schedule if the reminder is in the future and within 7 days
         if (scheduledDate > now) {
-          const notificationId = await notificationService.scheduleReminderNotification({
-            id: reminder.id,
-            title: `💝 ${reminder.title}`,
-            body: reminder.description || `Time to show some love! Don't forget: ${reminder.title}`,
-            scheduledDate: scheduledDate,
-            data: {
-              type: 'reminder',
-              reminderId: reminder.id,
-              partnerId: reminder.partner_id,
-            },
-          });
+          const daysUntil = Math.ceil((scheduledDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Only schedule if it's due within the next 7 days
+          if (daysUntil <= 7) {
+            const notificationId = await notificationService.scheduleReminderNotification({
+              id: reminder.id,
+              title: `💝 ${reminder.title}`,
+              body: reminder.description || `Time to show some love! Don't forget: ${reminder.title}`,
+              scheduledDate: scheduledDate,
+              data: {
+                type: 'reminder',
+                reminderId: reminder.id,
+                partnerId: reminder.partner_id,
+              },
+            });
 
-          if (notificationId) {
-            console.log(`[NotificationScheduler] Scheduled reminder: ${reminder.title} for ${scheduledDate.toISOString()}`);
+            if (notificationId) {
+              console.log(`[NotificationScheduler] Scheduled reminder: ${reminder.title} for ${scheduledDate.toISOString()} (${daysUntil} days away)`);
+            }
+          } else {
+            console.log(`[NotificationScheduler] Skipping reminder ${reminder.title} - too far in future (${daysUntil} days)`);
           }
         }
       }
@@ -136,8 +218,10 @@ class NotificationScheduler {
 
       const currentYear = new Date().getFullYear();
       const today = new Date();
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-      // Schedule birthday notification
+      // Schedule birthday notification only if it's within the next 30 days
       if (partner.birthday) {
         const birthdayThisYear = new Date(partner.birthday);
         birthdayThisYear.setFullYear(currentYear);
@@ -146,19 +230,26 @@ class NotificationScheduler {
           birthdayThisYear.setFullYear(currentYear + 1);
         }
 
-        const notificationId = await notificationService.scheduleImportantDateNotification(
-          'birthday',
-          partner.name,
-          birthdayThisYear,
-          preferences.reminderAdvance
-        );
+        // Only schedule if birthday is within the next 30 days
+        if (birthdayThisYear <= thirtyDaysFromNow) {
+          const daysUntil = Math.ceil((birthdayThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          const notificationId = await notificationService.scheduleImportantDateNotification(
+            'birthday',
+            partner.name,
+            birthdayThisYear,
+            preferences.reminderAdvance
+          );
 
-        if (notificationId) {
-          console.log(`[NotificationScheduler] Scheduled birthday notification for ${partner.name} on ${birthdayThisYear.toISOString()}`);
+          if (notificationId) {
+            console.log(`[NotificationScheduler] Scheduled birthday notification for ${partner.name} on ${birthdayThisYear.toISOString()} (${daysUntil} days away)`);
+          }
+        } else {
+          console.log(`[NotificationScheduler] Skipping birthday notification for ${partner.name} - too far in future`);
         }
       }
 
-      // Schedule anniversary notification
+      // Schedule anniversary notification only if it's within the next 30 days
       if (partner.anniversary) {
         const anniversaryThisYear = new Date(partner.anniversary);
         anniversaryThisYear.setFullYear(currentYear);
@@ -167,15 +258,22 @@ class NotificationScheduler {
           anniversaryThisYear.setFullYear(currentYear + 1);
         }
 
-        const notificationId = await notificationService.scheduleImportantDateNotification(
-          'anniversary',
-          partner.name,
-          anniversaryThisYear,
-          preferences.reminderAdvance
-        );
+        // Only schedule if anniversary is within the next 30 days
+        if (anniversaryThisYear <= thirtyDaysFromNow) {
+          const daysUntil = Math.ceil((anniversaryThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          const notificationId = await notificationService.scheduleImportantDateNotification(
+            'anniversary',
+            partner.name,
+            anniversaryThisYear,
+            preferences.reminderAdvance
+          );
 
-        if (notificationId) {
-          console.log(`[NotificationScheduler] Scheduled anniversary notification for ${partner.name} on ${anniversaryThisYear.toISOString()}`);
+          if (notificationId) {
+            console.log(`[NotificationScheduler] Scheduled anniversary notification for ${partner.name} on ${anniversaryThisYear.toISOString()} (${daysUntil} days away)`);
+          }
+        } else {
+          console.log(`[NotificationScheduler] Skipping anniversary notification for ${partner.name} - too far in future`);
         }
       }
     } catch (error) {
@@ -191,31 +289,42 @@ class NotificationScheduler {
       console.log('[NotificationScheduler] Scheduling daily suggestions...');
       
       const { data: partner } = await partnerService.getPartner();
-      if (!partner) return;
+      if (!partner) {
+        console.log('[NotificationScheduler] No partner found, skipping daily suggestions');
+        return;
+      }
 
-      // Schedule daily suggestions for the next 7 days
-      for (let i = 1; i <= 7; i++) {
-        const suggestionDate = new Date();
-        suggestionDate.setDate(suggestionDate.getDate() + i);
-        suggestionDate.setHours(9, 0, 0, 0); // 9 AM
+      // Only schedule daily suggestions if user has been active recently
+      // Check if user has any existing reminders or activity
+      const { data: reminders } = await reminderService.getUpcomingReminders(7); // Check next 7 days
+      const hasActivity = reminders && reminders.length > 0;
+      
+      if (!hasActivity) {
+        console.log('[NotificationScheduler] No recent user activity found, skipping daily suggestions');
+        return;
+      }
 
-        const suggestions = this.getDailySuggestions(partner.love_language);
-        const randomSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+      // Only schedule 1 daily suggestion for tomorrow (reduced from 3 days)
+      const suggestionDate = new Date();
+      suggestionDate.setDate(suggestionDate.getDate() + 1);
+      suggestionDate.setHours(9, 0, 0, 0); // 9 AM
 
-        const notificationId = await notificationService.scheduleReminderNotification({
-          id: `daily-suggestion-${i}`,
-          title: `💕 Daily Love Tip`,
-          body: randomSuggestion,
-          scheduledDate: suggestionDate,
-          data: {
-            type: 'daily_suggestion',
-            loveLanguage: partner.love_language,
-          },
-        });
+      const suggestions = this.getDailySuggestions(partner.love_language);
+      const randomSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
 
-        if (notificationId) {
-          console.log(`[NotificationScheduler] Scheduled daily suggestion for ${suggestionDate.toISOString()}`);
-        }
+      const notificationId = await notificationService.scheduleReminderNotification({
+        id: `daily-suggestion-1`,
+        title: `💕 Daily Love Tip`,
+        body: randomSuggestion,
+        scheduledDate: suggestionDate,
+        data: {
+          type: 'daily_suggestion',
+          loveLanguage: partner.love_language,
+        },
+      });
+
+      if (notificationId) {
+        console.log(`[NotificationScheduler] Scheduled daily suggestion for ${suggestionDate.toISOString()}`);
       }
     } catch (error) {
       console.error('[NotificationScheduler] Error scheduling daily suggestions:', error);
@@ -306,6 +415,35 @@ class NotificationScheduler {
     } catch (error) {
       console.error('[NotificationScheduler] Error getting scheduled notifications:', error);
       return [];
+    }
+  }
+
+  /**
+   * Manually trigger a test notification
+   */
+  async sendTestNotification(): Promise<void> {
+    try {
+      console.log('[NotificationScheduler] Sending test notification...');
+      await notificationService.sendImmediateNotification(
+        'SweetCue Test',
+        'This is a test notification to verify everything is working! 💝'
+      );
+      console.log('[NotificationScheduler] Test notification sent successfully');
+    } catch (error) {
+      console.error('[NotificationScheduler] Error sending test notification:', error);
+    }
+  }
+
+  /**
+   * Clear all scheduled notifications
+   */
+  async clearAllNotifications(): Promise<void> {
+    try {
+      console.log('[NotificationScheduler] Clearing all notifications...');
+      await notificationService.cancelAllNotifications();
+      console.log('[NotificationScheduler] All notifications cleared');
+    } catch (error) {
+      console.error('[NotificationScheduler] Error clearing notifications:', error);
     }
   }
 }

@@ -227,10 +227,16 @@ class ReminderService {
 
       console.log('Reminder completed:', data.title);
       
-      // Reschedule notifications after completion
+      // Only reschedule notifications if user has been active recently
       try {
         const { notificationScheduler } = await import('./notificationScheduler');
-        await notificationScheduler.scheduleAllNotifications();
+        const shouldSchedule = await notificationScheduler.shouldScheduleNotifications();
+        if (shouldSchedule) {
+          await notificationScheduler.scheduleAllNotifications();
+          console.log('[ReminderService] Notifications rescheduled after completion');
+        } else {
+          console.log('[ReminderService] Skipping notification reschedule - no recent activity');
+        }
       } catch (notificationError) {
         console.error('Error rescheduling notifications after completion:', notificationError);
       }

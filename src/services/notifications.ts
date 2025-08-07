@@ -53,25 +53,31 @@ class NotificationService {
       }
       
       if (finalStatus !== 'granted') {
-        console.log('[NotificationService] Permission not granted, notifications will not work');
-        return;
+        console.log('[NotificationService] Permission not granted, but local notifications may still work');
+        // Don't return early - continue with local notification setup
+      } else {
+        console.log('[NotificationService] Permissions granted, proceeding with setup...');
       }
-
-      console.log('[NotificationService] Permissions granted, proceeding with setup...');
 
       // Get push token with better error handling
       if (Device.isDevice) {
         try {
-          const token = await Notifications.getExpoPushTokenAsync({
-            projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-          });
-          this.expoPushToken = token.data;
-          console.log('[NotificationService] Push token obtained:', this.expoPushToken);
-          
-          // Save token to user profile
-          await this.savePushToken(this.expoPushToken);
+          const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
+          if (!projectId) {
+            console.warn('[NotificationService] EXPO_PUBLIC_PROJECT_ID not set, push notifications will not work');
+          } else {
+            const token = await Notifications.getExpoPushTokenAsync({
+              projectId: projectId,
+            });
+            this.expoPushToken = token.data;
+            console.log('[NotificationService] Push token obtained:', this.expoPushToken);
+            
+            // Save token to user profile
+            await this.savePushToken(this.expoPushToken);
+          }
         } catch (tokenError) {
           console.error('[NotificationService] Error getting push token:', tokenError);
+          console.log('[NotificationService] Continuing with local notifications only');
           // Continue without push token - local notifications will still work
         }
       }
@@ -135,8 +141,12 @@ class NotificationService {
     try {
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
-        console.log('[NotificationService] Notifications not permitted');
-        return null;
+        console.log('[NotificationService] Notifications not permitted, attempting to request permissions...');
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.log('[NotificationService] Permission denied, cannot schedule notification');
+          return null;
+        }
       }
 
       // Ensure the scheduled date is in the future
@@ -156,10 +166,7 @@ class NotificationService {
           sound: 'default',
           priority: 'high',
         },
-        trigger: {
-          date: reminder.scheduledDate,
-          channelId: 'reminders',
-        },
+        trigger: { date: reminder.scheduledDate } as any,
       });
 
       console.log('[NotificationService] Successfully scheduled reminder:', notificationId, 'for', reminder.scheduledDate);
@@ -181,11 +188,21 @@ class NotificationService {
   ): Promise<string | null> {
     try {
       const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') return null;
+      if (status !== 'granted') {
+        console.log('[NotificationService] Notifications not permitted for important dates');
+        return null;
+      }
 
       const notificationDate = new Date(date);
       notificationDate.setDate(notificationDate.getDate() - advanceDays);
       notificationDate.setHours(9, 0, 0, 0); // 9 AM
+
+      // Ensure the notification date is in the future
+      const now = new Date();
+      if (notificationDate <= now) {
+        console.log('[NotificationService] Important date notification is in the past, skipping:', notificationDate);
+        return null;
+      }
 
       const title = type === 'birthday' ? '🎂 Birthday Alert!' : '💝 Anniversary Alert!';
       const body = `${partnerName}'s ${type} is ${advanceDays === 0 ? 'today' : `in ${advanceDays} day${advanceDays > 1 ? 's' : ''}`}! Time to show some love! 💕`;
@@ -197,10 +214,7 @@ class NotificationService {
           data: { type, partnerName, date: date.toISOString() },
           sound: 'default',
         },
-        trigger: {
-          date: notificationDate,
-          channelId: 'important-dates',
-        },
+        trigger: { date: notificationDate } as any,
       });
 
       console.log('[NotificationService] Scheduled important date:', notificationId);
